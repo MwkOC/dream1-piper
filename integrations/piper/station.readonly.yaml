@@ -17,9 +17,9 @@ follower_r:
 # Roles of the zero-shot embodiment registered by setup for a custom URDF.
 cameras:
   - name: overhead
-    device: /dev/video4
-    width: 640
-    height: 480
+    source: zed_left.py:ZedLeft
+    width: 672  # stereo 1344x376, left eye only
+    height: 376
     fps: 30
   - name: wrist_l
     device: /dev/video0
@@ -28,9 +28,9 @@ cameras:
     fps: 30
     rotate: 0
   - name: wrist_r
-    source: zed_left.py:ZedLeft
-    width: 672  # HandUMI captures 1344x376 stereo, then retains the left eye
-    height: 376
+    device: /dev/video4
+    width: 640
+    height: 480
     fps: 30
     rotate: 0
 

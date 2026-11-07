@@ -48,8 +48,14 @@ gripper_zero_calibration:
   found_on_this_machine: false
   format: per-side closed_microm only; open endpoint must be resolved separately
 
-# User confirmed that Dream should use this same HandUMI camera mapping.
+# Snapshot of the local HandUMI file; its role assignment is superseded below.
 rig_camera_mapping:
   left_wrist: {type: opencv, index: 0, width: 640, height: 480, fps: 30}
   right_wrist: {type: zedmini, index: 2, width: 1344, height: 376, fps: 30}
   workspace: {type: opencv, index: 4, width: 640, height: 480, fps: 30}
+
+# User correction: ZED Mini is overhead, not wrist_r. Device indices still need hardware verification.
+confirmed_camera_mapping:
+  left_wrist: {type: opencv, index: 0, width: 640, height: 480, fps: 30}
+  right_wrist: {type: opencv, index: 4, width: 640, height: 480, fps: 30}
+  workspace: {type: zedmini, index: 2, width: 1344, height: 376, fps: 30}

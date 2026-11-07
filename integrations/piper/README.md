@@ -102,8 +102,8 @@ checkout; no afirmo que la web autenticada tenga exactamente los mismos pasos.
 | `rest` del brazo IK | Pose de trabajo medida; el cliente aplica el mismo modelo a ambos lados |
 | Cero y dirección | J1..J6 nativos del driver moderno Piper, comprobar visualmente con el URDF |
 | Pinza | Apertura calibrada entre 0 y 1, extremos independientes por lado |
-| Cámara general | `overhead`, OpenCV `/dev/video4`, 640×480 a 30 fps |
-| Cámaras de muñeca | `wrist_l`: OpenCV `/dev/video0`, 640×480; `wrist_r`: ZED Mini `/dev/video2`, ojo izquierdo 672×376; ambas 30 fps |
+| Cámara general | `overhead`, ZED Mini `/dev/video2`, ojo izquierdo 672×376 a 30 fps |
+| Cámaras de muñeca | `wrist_l`: OpenCV `/dev/video0`; `wrist_r`: OpenCV `/dev/video4`; ambas 640×480 a 30 fps |
 | Frecuencia del bucle | 20 Hz en la plantilla, default de la estación Dream; no mezclar con 30/50 Hz de XHUMAN |
 | Historial de vídeo | 9 frames a 5 Hz según SDK; captura solicitada 30 fps |
 | Modelo | Checkpoint EEF realmente disponible para la cuenta; no hay un checkpoint Piper implícito |
@@ -196,7 +196,7 @@ mismas cámaras ni CAN simultáneamente desde la estación Dream y XHUMAN.
 
 Si alguna de las cámaras OpenCV conserva la óptica fisheye de aproximadamente
 200° mencionada inicialmente, la API acepta sus imágenes, pero eso no demuestra
-robustez zero-shot a esa óptica. La wrist derecha del rig confirmado es una ZED.
+robustez zero-shot a esa óptica. La ZED Mini corresponde a la vista general.
 No encontré en el SDK una focal, FOV o posición numérica obligatoria. Tampoco una
 garantía de que rectificar a 100–120° mejore el modelo: ese rango mencionado antes
 en el chat era una propuesta experimental, no una recomendación oficial.
@@ -260,12 +260,13 @@ HandUMI resuelve el recorrido por parámetros del controlador/SDK y permite
 configuración por lado, pero no existe aquí una captura física exportada de ambos
 extremos que podamos importar como calibración medida.
 
-Confirmaste que Dream debe usar las mismas cámaras que `configs/rig.yaml` de
-HandUMI. La plantilla aplica `workspace`→`overhead` (OpenCV `/dev/video4`,
-640×480), `left_wrist`→`wrist_l` (OpenCV `/dev/video0`, 640×480) y
-`right_wrist`→`wrist_r` (ZED Mini `/dev/video2`, captura estéreo 1344×376 y
-salida del ojo izquierdo 672×376), todas a 30 fps. Esta configuración reemplaza
-la descripción inicial de una ZED top y dos wrist fisheye.
+La corrección explícita del usuario establece la ZED Mini como `overhead`
+(`/dev/video2`, captura estéreo 1344×376 y salida del ojo izquierdo 672×376),
+`wrist_l` como OpenCV `/dev/video0` y `wrist_r` como OpenCV `/dev/video4`
+(ambas 640×480), todas a 30 fps. El archivo local `configs/rig.yaml` de HandUMI
+asigna roles diferentes; se conserva su contenido como referencia histórica
+en `rig_camera_mapping` y la configuración corregida en `confirmed_camera_mapping`.
+La plantilla y las pruebas usan esta última. Verificar los índices físicos al conectar.
 No se copió el rig completo ni sus datos de red.
 
 ## Referencias verificadas

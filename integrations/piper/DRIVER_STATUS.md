@@ -53,9 +53,9 @@ No seleccionar esta clase para los pasos motorizados del wizard ni quitar
    J1..J6, límites del firmware y separación/orientación física de bases. El URDF
    local representa 0.60 m de separación; no es un requisito de Dream Labs.
 4. **Cámaras:** confirmar los dispositivos persistentes, modos reales y rotación.
-   La asignación y las resoluciones ya se importaron del rig de HandUMI, según
-   confirmación del usuario: OpenCV general `/dev/video4`, OpenCV wrist izquierda
-   `/dev/video0`, ZED Mini wrist derecha `/dev/video2` con recorte monocular.
+   La asignación sigue la corrección del usuario: ZED Mini general `/dev/video2`
+   con recorte monocular, OpenCV wrist izquierda `/dev/video0` y OpenCV wrist
+   derecha `/dev/video4`. Esta asignación reemplaza los roles del rig local HandUMI.
    Falta verificar captura física y calidad de imágenes para el modelo.
 5. **Plataforma:** registrar el embodiment custom, reemplazar
    `REPLACE_ACCOUNT/piper-bimanual`, comprobar los roles de cámara y seleccionar
