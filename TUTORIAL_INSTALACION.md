@@ -1,6 +1,6 @@
 # Tutorial: instalar Dream Labs y abrir el editor TCP de Piper
 
-Este tutorial reproduce la instalación realizada en este proyecto, en Linux y con
+Este tutorial reproduce la instalación de esta integración, en Linux y con
 Python 3.12. El entorno `.venv` es independiente de Conda y de los entornos de
 HandUMI/XHUMAN. No necesitas el MCP para seguir estos pasos.
 
@@ -52,10 +52,10 @@ el entorno `.venv`**:
 
 ```bash
 uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python ./dream_library/dream_client ./dream_library
+uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-Se instalan los dos paquetes del código clonado:
+Se instalan desde PyPI los dos paquetes fijados en `requirements.txt`:
 
 | Paquete | Versión instalada en este checkout |
 | --- | --- |
@@ -64,12 +64,12 @@ Se instalan los dos paquetes del código clonado:
 
 La primera instalación descarga dependencias de vídeo, visualización y cinemática,
 por lo que puede tardar varios minutos. Las dependencias transitivas se resuelven
-al instalar; los requisitos completos están en los `pyproject.toml` del proyecto.
+al instalar. El repositorio mantiene la integración Piper, no una copia del SDK.
 
 Si ya existe `.venv` y solo falta instalar los paquetes, ejecuta únicamente:
 
 ```bash
-uv pip install --python .venv/bin/python ./dream_library/dream_client ./dream_library
+uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
 ### Alternativa sin `uv`
@@ -79,7 +79,7 @@ para crear entornos virtuales y todavía no existe `.venv`:
 
 ```bash
 python3.12 -m venv .venv
-.venv/bin/python -m pip install ./dream_library/dream_client ./dream_library
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 No necesitas ejecutar ambos procedimientos.
@@ -233,5 +233,5 @@ El driver Piper del repositorio sigue siendo de solo lectura. Registrar el
 embodiment, completar el driver activo y validar movimiento son tareas posteriores;
 abrir el editor no las realiza automáticamente.
 
-Continúa con la [guía Piper](integrations/piper/README.md) y el
-[estado de los pendientes](integrations/piper/DRIVER_STATUS.md).
+Continúa con la [guía Piper](docs/SETUP_PIPER.md) y el
+[estado de los pendientes](docs/DRIVER_STATUS.md).

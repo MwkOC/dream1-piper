@@ -1,95 +1,70 @@
-# Dream-1 · Piper / XHUMAN
+# Dream-1 para AgileX Piper
 
-Adaptación en desarrollo de Dream Labs para dos AgileX Piper y las cámaras del rig
-HandUMI: general ZED Mini monocular y ambas cámaras wrist OpenCV,
-integrada con el workspace NONHUMAN/XHUMAN.
+Integración de dos brazos Piper con Dream API y el workspace NONHUMAN/HandUMI.
+La cámara general es una ZED Mini monocular; ambas cámaras de muñeca son OpenCV.
 
-- [Configuración Piper, cámaras y pasos de setup](integrations/piper/README.md).
-- [Tutorial de instalación y editor TCP, con comandos para copiar](TUTORIAL_INSTALACION.md).
-- [Estado del template de driver y pendientes](integrations/piper/DRIVER_STATUS.md).
-- [Pipeline de adaptación a XHUMAN](PIPELINE_DREAM1_XHUMAN.md).
-- [MCP local para controlar Vivaldi y configurar Dream Labs](tools/vivaldi-mcp/README.md).
+**Estado:** driver de solo lectura, configuración pendiente de TCP/embodiment y
+seis pruebas offline. No hay un driver activo validado para mover los brazos.
 
-**Estado:** driver de solo lectura y seis pruebas offline. Las homes se importaron
-de HandUMI; el driver activo, el TCP confirmado y la pose IK `rest` todavía no
-están completos ni validados con hardware.
-Las rutas locales de XHUMAN se deben ajustar al clonar en otra máquina. Este
-repositorio conserva el código y las licencias de
-[dreamlabs-co/dreamlabs](https://github.com/dreamlabs-co/dreamlabs), revisión base
-`2d2f5239eb737c9271e15054637fe952758d5823`.
-
-La documentación original de Dream Labs continúa abajo.
-
----
-
-<!-- Upstream: dreamlabs's PyPI page is a copy of the original content below, dream_library/README.pypi.md, with the logo at an absolute URL.
-Change the two together. -->
-
-<div align="center">
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/dreamlabs-logo-dark.png">
-  <img src="assets/dreamlabs-logo-light.png" alt="Dream Labs" width="520">
-</picture>
-
-<p>
-  <a href="https://dreamlabs.ai"><strong>Blog Post</strong></a> |
-  <a href="https://platform.dreamlabs.ai"><strong>DreamAPI</strong></a> |
-  <a href="https://platform.dreamlabs.ai/api-documentation"><strong>Documentation</strong></a>
-</p>
-
-</div>
-
-## What is this library for
-
-`dreamlabs` is the Python client for DreamAPI, which hosts **Dream-1**, the Dream Labs robot model. Dream-1 looks at
-your robot's cameras and joint positions, reads the task you type, and answers with the next joint targets for the
-arms, zero-shot, with no training on your robot.
-
-It comes two ways:
-
-- **`dreamcli`** runs your robot on our control loop: setup, cameras, arms and Live View, with no code to write.
-- **`dream.DreamClient`** calls Dream-1 from your own control loop: you send observations, it returns actions.
-
-## Quick Guide
-
-Sign in at [platform.dreamlabs.ai](https://platform.dreamlabs.ai/api-keys) and create an API key. It is shown only
-once, so keep it somewhere safe.
-
-### dreamcli: our control loop
+## Instalación
 
 ```bash
-pip install dreamlabs
-dreamcli setup       # arms and cameras
-dreamcli robot up    # start the robot
+uv venv .venv --python 3.12
+uv pip install --python .venv/bin/python -r requirements.txt
+source .venv/bin/activate
+dreamcli --version
 ```
 
-Give it a task from [Live View](https://platform.dreamlabs.ai/live). For the full walkthrough, open
-[Robot Setup](https://platform.dreamlabs.ai/setup).
+Si `.venv` ya existe, omite su creación. Dream Labs 1.0.18 y su cliente 1.0.9 se
+instalan desde PyPI; este repositorio no mantiene una copia del monorepo del proveedor.
 
-### DreamClient: your own control loop
+Para abrir únicamente el editor TCP local:
 
 ```bash
-pip install dreamlabs-client
-export DREAM_API_KEY=dl_live_...
+dreamcli --home "$PWD/integrations/piper" tcp --host 127.0.0.1
 ```
 
-```python
-import dream
+Abre la dirección completa que imprima la terminal. Ctrl+C detiene el editor.
 
-client = dream.DreamClient()
+## Documentación
+
+- [Tutorial de instalación y editor TCP](TUTORIAL_INSTALACION.md).
+- [Configuración Piper y cámaras](docs/SETUP_PIPER.md).
+- [Estado del driver y pendientes](docs/DRIVER_STATUS.md).
+- [Pipeline de adaptación a XHUMAN](docs/PIPELINE_XHUMAN.md).
+- [Notas de arquitectura aportadas por el usuario](docs/notas-arquitectura-usuario.md).
+
+## Estructura
+
+```text
+integrations/piper/     driver, cámara ZED y configuraciones
+tests/                 pruebas sin cámaras, CAN ni API
+docs/                  setup, pendientes, pipeline y notas
+requirements.txt       SDK oficial y cliente con versiones fijadas
+requirements-dev.txt   dependencias anteriores y pytest
 ```
 
-To run a model from your loop, see the [documentation](https://platform.dreamlabs.ai/api-documentation).
+Las configuraciones importadas de HandUMI tienen su procedencia en
+`integrations/piper/handumi_reference.yaml`. Los URDF y calibraciones físicos
+dependen del workspace local; no se inventan ni se incluyen credenciales.
 
-## Documentation
+## Pruebas
 
-The [DreamAPI documentation](https://platform.dreamlabs.ai/api-documentation) covers everything beyond the quick
-guide: getting started, calling Dream-1 from your own control loop with `dream.DreamClient`, showing your robot in
-Live View, bringing a robot of your own, and fine-tuning Dream-1 on recordings of your robot.
+```bash
+uv pip install --python .venv/bin/python -r requirements-dev.txt
+.venv/bin/python -m pytest -q tests
+```
 
-## License
+Las comprobaciones de referencias HandUMI/XHUMAN se omiten si esos workspaces no
+están presentes. Las demás pruebas usan dispositivos simulados.
 
-Apache License 2.0 (`LICENSE`). Three of the vendored packages, `i2rt`, `pyroki` and `jaxls` under
-`dream_library/vendor/`, keep their own MIT licenses, and the robot models and example assets that came from elsewhere
-keep theirs, each in a `LICENSE` file in its own folder.
+El MCP de Vivaldi se mantiene por separado en
+`/home/mwkoc/GITHUB/Mini_Proyectos/tools/vivaldi-mcp`; no es necesario para usar
+Dream Labs o abrir el editor TCP.
+
+## Procedencia
+
+SDK oficial: [dreamlabs-co/dreamlabs](https://github.com/dreamlabs-co/dreamlabs),
+revisión de referencia `2d2f5239eb737c9271e15054637fe952758d5823`.
+El código heredado retirado se conserva en el historial Git; no se reescribe ese
+historial. Se mantiene la [licencia Apache-2.0](LICENSE).
