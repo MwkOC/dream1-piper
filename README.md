@@ -1,4 +1,24 @@
-<!-- dreamlabs's PyPI page is a copy of this file, dream_library/README.pypi.md, with the logo at an absolute URL.
+# Dream-1 · Piper / XHUMAN
+
+Adaptación en desarrollo de Dream Labs para dos AgileX Piper, una ZED Mini
+monocular y dos cámaras wrist fisheye, integrada con el workspace NONHUMAN/XHUMAN.
+
+- [Configuración Piper, cámaras y pasos de setup](integrations/piper/README.md).
+- [Estado del template de driver y pendientes](integrations/piper/DRIVER_STATUS.md).
+- [Pipeline de adaptación a XHUMAN](PIPELINE_DREAM1_XHUMAN.md).
+
+**Estado:** driver de solo lectura y cinco pruebas offline. El driver activo, el
+TCP y las poses de reposo todavía no están completos ni validados con hardware.
+Las rutas locales de XHUMAN se deben ajustar al clonar en otra máquina. Este
+repositorio conserva el código y las licencias de
+[dreamlabs-co/dreamlabs](https://github.com/dreamlabs-co/dreamlabs), revisión base
+`2d2f5239eb737c9271e15054637fe952758d5823`.
+
+La documentación original de Dream Labs continúa abajo.
+
+---
+
+<!-- Upstream: dreamlabs's PyPI page is a copy of the original content below, dream_library/README.pypi.md, with the logo at an absolute URL.
 Change the two together. -->
 
 <div align="center">

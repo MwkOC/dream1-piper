@@ -1,0 +1,9 @@
+{
+  "urdf": "/home/mwkoc/GITHUB/nonhuman/XHUMAN/assets/piper/piper.urdf",
+  "base": "left_base_link",
+  "flange": "left_gripper_base",
+  "tcp": null,
+  "approach": null,
+  "jaw": null,
+  "rest": null
+}

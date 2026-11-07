@@ -37,6 +37,8 @@ permissions:
   contents: read
 jobs:
   plan:
+    # This derived repository does not publish Dream Labs' packages.
+    if: github.repository == 'dreamlabs-co/dreamlabs'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
