@@ -1,0 +1,13 @@
+{
+  "name": "dream1-piper-vivaldi-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Vivaldi browser access through Chrome DevTools MCP",
+  "scripts": {
+    "start": "bash run.sh",
+    "test": "node smoke.mjs"
+  },
+  "dependencies": {
+    "chrome-devtools-mcp": "1.12.0"
+  }
+}

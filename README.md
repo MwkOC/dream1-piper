@@ -7,6 +7,7 @@ integrada con el workspace NONHUMAN/XHUMAN.
 - [Configuración Piper, cámaras y pasos de setup](integrations/piper/README.md).
 - [Estado del template de driver y pendientes](integrations/piper/DRIVER_STATUS.md).
 - [Pipeline de adaptación a XHUMAN](PIPELINE_DREAM1_XHUMAN.md).
+- [MCP local para controlar Vivaldi y configurar Dream Labs](tools/vivaldi-mcp/README.md).
 
 **Estado:** driver de solo lectura y seis pruebas offline. Las homes se importaron
 de HandUMI; el driver activo, el TCP confirmado y la pose IK `rest` todavía no
