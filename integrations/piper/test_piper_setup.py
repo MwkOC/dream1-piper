@@ -86,22 +86,40 @@ def test_stale_feedback_and_nonfinite_values_are_refused(monkeypatch, tmp_path):
     arm.close()
 
 
-def test_template_uses_custom_roles_and_refuses_unmeasured_home(tmp_path):
-    from robots import config, errors
+def test_template_uses_custom_roles_and_imported_handumi_home():
+    from robots import config
 
     template = yaml.safe_load((HERE / "station.readonly.yaml").read_text())
     assert template["body"] == "custom"
     assert {camera["name"] for camera in template["cameras"]} == {"overhead", "wrist_l", "wrist_r"}
-    assert template["follower_l"]["home"] is None
-    with pytest.raises(errors.ConfigError, match="home"):
-        config.load(HERE / "station.readonly.yaml")
-    # Synthetic poses check the rest of the upstream schema; they are never saved as station calibration.
-    for side in ("l", "r"):
-        template[f"follower_{side}"]["home"] = [0.0] * 6
-    completed = tmp_path / "schema-only.yaml"
-    completed.write_text(yaml.safe_dump(template))
-    loaded = config.load(completed)
+    reference = yaml.safe_load((HERE / "handumi_reference.yaml").read_text())
+    for side, key in (("left", "l"), ("right", "r")):
+        assert template[f"follower_{key}"]["home"] == reference["home_rad"][side]
+        assert template[f"follower_{key}"]["can_channel"] == reference["can"][side]
+    loaded = config.load(HERE / "station.readonly.yaml")
     assert loaded.body == "custom" and loaded.control_hz == 20
+
+
+def test_handumi_reference_matches_source_without_mixing_tcp_frames():
+    reference = yaml.safe_load((HERE / "handumi_reference.yaml").read_text())
+    root = Path(reference["source"]["repository"])
+    if not root.exists():
+        pytest.skip("HandUMI workspace is not present on this machine")
+    robot = yaml.safe_load((root / reference["source"]["robot_profile"]).read_text())
+    assert reference["home_rad"]["left"] == robot["home_q"][:6]
+    assert reference["home_rad"]["right"] == robot["home_q"][7:13]
+    assert reference["posture_rad"]["left"] == robot["posture_q"][:6]
+    assert reference["posture_rad"]["right"] == robot["posture_q"][7:13]
+    for key, value in reference["native_control_reference"].items():
+        assert value == robot["real"][key]
+    rig = yaml.safe_load((root / reference["source"]["rig_profile"]).read_text())
+    assert reference["can"]["left"] == rig["robots"]["piper"]["can"]["left_port"]
+    assert reference["can"]["right"] == rig["robots"]["piper"]["can"]["right_port"]
+    urdf = ET.parse(root / reference["source"]["urdf"]).getroot()
+    joint = urdf.find("joint[@name='left_link6_to_tcp']")
+    xyz = [float(value) for value in joint.find("origin").get("xyz").split()]
+    assert reference["nominal_tcp"]["xyz_m"] == xyz
+    assert reference["nominal_tcp"]["physical_confirmation"] == "pending"
 
 
 def test_local_urdf_chain_has_six_arm_joints():

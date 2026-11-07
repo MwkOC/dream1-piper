@@ -7,8 +7,9 @@ monocular y dos cámaras wrist fisheye, integrada con el workspace NONHUMAN/XHUM
 - [Estado del template de driver y pendientes](integrations/piper/DRIVER_STATUS.md).
 - [Pipeline de adaptación a XHUMAN](PIPELINE_DREAM1_XHUMAN.md).
 
-**Estado:** driver de solo lectura y cinco pruebas offline. El driver activo, el
-TCP y las poses de reposo todavía no están completos ni validados con hardware.
+**Estado:** driver de solo lectura y seis pruebas offline. Las homes se importaron
+de HandUMI; el driver activo, el TCP confirmado y la pose IK `rest` todavía no
+están completos ni validados con hardware.
 Las rutas locales de XHUMAN se deben ajustar al clonar en otra máquina. Este
 repositorio conserva el código y las licencias de
 [dreamlabs-co/dreamlabs](https://github.com/dreamlabs-co/dreamlabs), revisión base

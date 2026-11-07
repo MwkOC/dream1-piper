@@ -1,17 +1,18 @@
-# Template for manual setup. Read README.md; calibration placeholders deliberately prevent a run.
+# Template for manual setup. TCP/embodiment are pending; the driver only reads feedback.
 body: custom
 custom:
   driver: piper_readonly.py:ReadOnlyArm
   ik: arm.pending.json
   embodiment: REPLACE_ACCOUNT/piper-bimanual
 
-# From XHUMAN bin/set_env.sh. Verify which physical arm each CAN interface reaches.
+# CAN and home from HandUMI configs/rig.yaml and configs/robots/piper.yaml.
+# Configured home, not a new measurement. Verify the physical pose and access trajectory.
 follower_l:
   can_channel: can0
-  home: null  # replace with six measured URDF radians, not normalized follower values
+  home: [0.0, 0.0, 0.0, 0.0, 0.4363323, 0.0]
 follower_r:
   can_channel: can1
-  home: null
+  home: [0.0, 0.0, 0.0, 0.0, 0.4363323, 0.0]
 
 # Roles of the zero-shot embodiment registered by setup for a custom URDF.
 cameras:

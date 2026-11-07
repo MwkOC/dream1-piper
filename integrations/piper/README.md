@@ -19,8 +19,10 @@ driver, cinemática, ceros y límites aunque tengan el mismo número de articula
   pose de reposo pendientes. Es deliberadamente inválido hasta medirlos.
 - `test_piper_setup.py`: comprobaciones offline con CAN y vídeo simulados.
 
-La plantilla aún no puede ejecutar una política: `home: null` y la calibración
-incompleta impiden tratarla como una estación lista. Tampoco se incluye un driver
+La plantilla aún no puede ejecutar una política: el TCP y el embodiment pendientes
+impiden tratarla como una estación lista. Las poses `home` se importaron de la
+configuración de HandUMI y todavía requieren comprobación física en Dream.
+Tampoco se incluye un driver
 activo. Completarlo exige comprobar correspondencia física/URDF, habilitación con
 feedback, velocidad, fuerza de pinza y comportamiento de parada/torque-off; no
 basta cambiar el nombre de la clase. El driver de lectura no sirve para los pasos
@@ -96,7 +98,7 @@ checkout; no afirmo que la web autenticada tenga exactamente los mismos pasos.
 | Brazos | Dos Piper, 6 articulaciones por lado y pinza paralela |
 | CAN izquierdo / derecho | `can0` / `can1`, según `XHUMAN/bin/set_env.sh`; confirmar conexión física |
 | Modelo IK | Archivo propio de URDF/TCP medido, cabeza de acción EEF |
-| `home` izquierdo y derecho | Seis radianes medidos por lado; no rellenar con ceros para ejecutar |
+| `home` izquierdo y derecho | Importadas de HandUMI: J5=0.4363323 rad (25°), las otras cinco articulaciones a cero; verificar trayectoria |
 | `rest` del brazo IK | Pose de trabajo medida; el cliente aplica el mismo modelo a ambos lados |
 | Cero y dirección | J1..J6 nativos del driver moderno Piper, comprobar visualmente con el URDF |
 | Pinza | Apertura calibrada entre 0 y 1, extremos independientes por lado |
@@ -219,9 +221,47 @@ PYTHONPATH="$PWD/dream_library/robots/src:$PWD/dream_library/dream_client/src:$P
 
 Las pruebas comprueban recorte del ojo/color, conversión miligrados→radianes,
 apertura con extremos medidos, ausencia de comandos de motores, rechazo de
-feedback antiguo/NaN, rechazo de homes sin medir y seis articulaciones en la cadena.
+feedback antiguo/NaN, coherencia con la configuración HandUMI y seis articulaciones en la cadena.
 Usan mocks y el URDF local; no instalan paquetes, leen cámaras, acceden a CAN,
 registran robots ni consumen la API. No validan físicamente la calibración.
+
+## Extracción de HandUMI
+
+Se revisó `handumi-sw` y se extrajeron sus datos a
+[`handumi_reference.yaml`](handumi_reference.yaml). La referencia incluye el commit
+de origen, las poses `home`, la preferencia parcial de postura, los parámetros de
+control nativo y el TCP nominal del URDF. No importa ni ejecuta el driver de HandUMI.
+
+La home de cada brazo es `[0, 0, 0, 0, 0.4363323, 0]` en radianes, con la pinza
+cerrada en HandUMI. Dream puede abrir la pinza durante home: la equivalencia de las
+seis articulaciones no elimina esa diferencia. `posture_q` deja tres coordenadas
+articulares por lado en `null`; no es una pose `rest` completa para Dream.
+
+El URDF de HandUMI corrigió el TCP desde 0.145 m a **0.1358 m** sobre z de `link6`.
+Se conserva como referencia nominal, sin rellenar `tcp`, `approach` ni `jaw` de
+`arm.pending.json`: todavía hace falta confirmar el conjunto físico y sus ejes.
+La calibración `controller_tcp/pico_piper_beta.yaml` está medida en el marco del
+mando PICO; copiar su posición como TCP de Dream mezclaría dos transformaciones
+distintas. Se documentó la diferencia en vez de trasladar esas coordenadas.
+
+Los métodos `send_mdeg`, `send_gripper_microm`, `disable_arm`, `disable_gripper`,
+`disconnect` y la habilitación con posición inicial medida de
+`src/handumi/real/piper/driver.py` son referencias concretas para un driver activo.
+El constructor puede resetear y habilitar motores, por lo que no se instancia para
+extraer información. La política de estacionamiento/deshabilitación todavía debe
+adaptarse al ciclo de vida de Dream.
+
+No se encontró `~/.cache/handumi/piper_grippers.yaml` ni el equivalente XHUMAN en
+este equipo. HandUMI guarda solo `closed_microm` por lado, mientras nuestro driver
+de lectura exige además `open_microm`; no basta cambiar la ruta del archivo.
+HandUMI resuelve el recorrido por parámetros del controlador/SDK y permite
+configuración por lado, pero no existe aquí una captura física exportada de ambos
+extremos que podamos importar como calibración medida.
+
+Finalmente, `configs/rig.yaml` de HandUMI asigna la ZED a `right_wrist` y `/dev/video4`
+a `workspace`, en conflicto con la ZED top que describiste. Se mantiene la
+asignación de cámaras de nuestra plantilla hasta comprobar el montaje actual.
+No se copió el rig completo ni sus datos de red.
 
 ## Referencias verificadas
 

@@ -2,6 +2,12 @@
 
 Revisión: 2026-11-07.
 
+Actualización HandUMI: se extrajeron las homes y los parámetros nativos a
+[`handumi_reference.yaml`](handumi_reference.yaml), con revisión de origen.
+La plantilla ya contiene las homes configuradas en HandUMI; no son mediciones
+nuevas ni una validación de movimiento en Dream. El TCP nominal de ese URDF es
+0.1358 m desde `link6`, y se mantiene pendiente la confirmación del TCP físico.
+
 **El template no está completo para operar los Piper.** Hay una implementación
 derivada para leer feedback y comprobar el contrato sin habilitar motores.
 El template original se conserva sin editar en
@@ -38,9 +44,11 @@ No seleccionar esta clase para los pasos motorizados del wizard ni quitar
    [`arm.pending.json`](arm.pending.json), medidos en el marco del flange elegido.
    Usar `dreamcli tcp` para confirmar el punto; el offset nominal del URDF no
    sustituye la medida de las pinzas montadas.
-2. **Reposo:** medir los seis valores `rest` del modelo IK y los seis `home` por
-   lado de la estación, en radianes. Comprobar trayectorias de acceso y estado de
-   apertura de pinzas durante home.
+2. **Reposo:** completar los seis valores `rest` del modelo IK. Las homes de ambos
+   brazos ya se importaron de HandUMI: `[0, 0, 0, 0, 0.4363323, 0]` radianes.
+   Comprobar trayectorias de acceso y estado de apertura de pinzas durante home.
+   La preferencia `posture_q` de HandUMI es parcial; no permite completar `rest`
+   sustituyendo arbitrariamente sus valores `null`.
 3. **CAN y geometría:** confirmar izquierda=`can0`, derecha=`can1`, ceros y signos
    J1..J6, límites del firmware y separación/orientación física de bases. El URDF
    local representa 0.60 m de separación; no es un requisito de Dream Labs.
@@ -60,10 +68,17 @@ validación física; no deben inventarse para hacer que cargue la plantilla.
 
 ## Qué ya está verificado
 
-Cinco pruebas offline cubren unidades, apertura de pinza, ausencia de objetivos
+Seis pruebas offline cubren unidades, apertura de pinza, ausencia de objetivos
 de motor, feedback antiguo/no finito, recorte de la ZED, esquema de estación y
 seis articulaciones de la cadena del URDF. La comprobación del URDF se omite si
 el workspace XHUMAN no existe en la máquina donde se ejecutan las pruebas.
+La comprobación de referencias HandUMI se omite si su workspace no está presente.
+
+HandUMI aporta implementaciones de envío, habilitación y deshabilitación que
+sirven de base, pero todavía no se han integrado como driver activo de Dream.
+Su calibración PICO es mando→herramienta, distinta de flange→pinza. No están
+presentes en este equipo sus ceros locales de pinza ni una calibración completa
+de extremos compatible con nuestro driver de lectura.
 
 No se ejecutaron motores, inferencia remota, registro de robot ni fine-tuning.
 Las calibraciones físicas y credenciales permanecen fuera del repositorio.
