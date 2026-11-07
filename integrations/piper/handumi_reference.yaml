@@ -48,7 +48,7 @@ gripper_zero_calibration:
   found_on_this_machine: false
   format: per-side closed_microm only; open endpoint must be resolved separately
 
-# Mapping conflict with the user's declared rig: retain our station camera roles until verified.
+# User confirmed that Dream should use this same HandUMI camera mapping.
 rig_camera_mapping:
   left_wrist: {type: opencv, index: 0, width: 640, height: 480, fps: 30}
   right_wrist: {type: zedmini, index: 2, width: 1344, height: 376, fps: 30}

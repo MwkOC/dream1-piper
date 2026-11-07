@@ -1,7 +1,8 @@
 # Dream-1 · Piper / XHUMAN
 
-Adaptación en desarrollo de Dream Labs para dos AgileX Piper, una ZED Mini
-monocular y dos cámaras wrist fisheye, integrada con el workspace NONHUMAN/XHUMAN.
+Adaptación en desarrollo de Dream Labs para dos AgileX Piper y las cámaras del rig
+HandUMI: general OpenCV, wrist izquierda OpenCV y wrist derecha ZED Mini monocular,
+integrada con el workspace NONHUMAN/XHUMAN.
 
 - [Configuración Piper, cámaras y pasos de setup](integrations/piper/README.md).
 - [Estado del template de driver y pendientes](integrations/piper/DRIVER_STATUS.md).

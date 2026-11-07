@@ -98,6 +98,17 @@ def test_template_uses_custom_roles_and_imported_handumi_home():
         assert template[f"follower_{key}"]["can_channel"] == reference["can"][side]
     loaded = config.load(HERE / "station.readonly.yaml")
     assert loaded.body == "custom" and loaded.control_hz == 20
+    cameras = {camera["name"]: camera for camera in template["cameras"]}
+    for handumi_role, dream_role in (("workspace", "overhead"), ("left_wrist", "wrist_l"), ("right_wrist", "wrist_r")):
+        source = reference["rig_camera_mapping"][handumi_role]
+        camera = cameras[dream_role]
+        assert camera["height"] == source["height"] and camera["fps"] == source["fps"]
+        if source["type"] == "zedmini":
+            assert camera["source"] == "zed_left.py:ZedLeft"
+            assert camera["width"] * 2 == source["width"]
+        else:
+            assert camera["device"] == f"/dev/video{source['index']}"
+            assert camera["width"] == source["width"]
 
 
 def test_handumi_reference_matches_source_without_mixing_tcp_frames():
