@@ -1,6 +1,6 @@
 """One-shot, read-only Dream Labs API probe for the bimanual Piper.
 
-Usage: python tests/test_dream_api.py --models | --infer
+Usage: python tests/test_dream_api.py --models | --infer --prompt "..."
 """
 
 import argparse
@@ -19,7 +19,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.dls import IncrementalDlsSolver
+from scripts.driver import PiperFeedbackArm
+from scripts.gripper_calibration import load_piper_gripper_calibrations
+from scripts.piper import BiPiperConfig
 
 
 def _tr(xyz, rpy):
@@ -55,7 +57,6 @@ class PiperKinematics:
 
     def _chain(self, q):
         t = np.eye(4)
-        origins, axes = [], []
         index = 0
         for joint in self.chain:
             origin = joint.find("origin")
@@ -66,18 +67,12 @@ class PiperKinematics:
                 continue
             axis_node = joint.find("axis")
             axis = np.fromstring(axis_node.get("xyz", "1 0 0"), sep=" ") if axis_node is not None else np.array([1., 0., 0.])
-            origins.append(t[:3, 3].copy())
-            axes.append(t[:3, :3] @ axis)
             t[:3, :3] = t[:3, :3] @ Rotation.from_rotvec(axis * float(q[index])).as_matrix()
             index += 1
-        return t, origins, axes
+        return t
 
     def forward_matrix(self, joints):
-        return self._chain(joints)[0]
-
-    def jacobian(self, joints):
-        tcp, origins, axes = self._chain(joints)
-        return np.stack([np.r_[np.cross(a, tcp[:3, 3] - p), a] for p, a in zip(origins, axes)], axis=1)
+        return self._chain(joints)
 
 
 def settings():
@@ -129,43 +124,17 @@ def frame_b64(capture, spec):
     return base64.b64encode(jpeg.tobytes()).decode("ascii")
 
 
-class Feedback:
-    def __init__(self, can_port, closed, opened):
-        from piper_sdk import C_PiperInterface_V2
-
-        self.sdk = C_PiperInterface_V2(can_port)
-        self.closed, self.opened = closed, opened
-        self.sdk.ConnectPort(piper_init=False)
-
-    def close(self):
-        self.sdk.DisconnectPort()
-
-    def read(self):
-        joints = self.sdk.GetArmJointMsgs()
-        grip = self.sdk.GetArmGripperMsgs()
-        if float(joints.time_stamp) <= 0 or float(grip.time_stamp) <= 0:
-            raise RuntimeError("Piper feedback has not arrived")
-        q = np.deg2rad(np.array([getattr(joints.joint_state, f"joint_{i}") for i in range(1, 7)], dtype=float) / 1000)
-        opening = (float(grip.gripper_state.grippers_angle) - self.closed) / (self.opened - self.closed)
-        if not np.isfinite(q).all() or not np.isfinite(opening) or not -0.02 <= opening <= 1.02:
-            raise RuntimeError("Invalid Piper feedback")
-        return q, float(np.clip(opening, 0, 1))
-
-
-def rot6_to_quat(row):
-    a = np.asarray(row, dtype=float).reshape(6)
-    x = a[:3] / np.linalg.norm(a[:3])
-    y = a[3:] - np.dot(a[3:], x) * x
-    y /= np.linalg.norm(y)
-    return Rotation.from_matrix(np.stack((x, y, np.cross(x, y)), axis=1)).as_quat()
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument("--models", action="store_true", help="Check key and list accessible checkpoints")
     choice.add_argument("--infer", action="store_true", help="Capture one observation and request one action chunk; no motor commands")
+    parser.add_argument("--prompt", help="Instruction for the inference observation")
     args = parser.parse_args()
+    if args.infer and (not args.prompt or not args.prompt.strip()):
+        parser.error("--infer requires a non-empty --prompt")
+    if args.models and args.prompt is not None:
+        parser.error("--prompt is only valid with --infer")
     config = settings()
     key = key_from_config(config)
     import dream
@@ -178,28 +147,28 @@ def main():
 
         bipiper = yaml.safe_load((ROOT / "configs/bipiper.yaml").read_text(encoding="utf-8"))
         robot_cfg = bipiper["robot"]
-        inference_cfg = bipiper["inference"]["robot"]
         cameras = yaml.safe_load((ROOT / "configs/cameras.yaml").read_text(encoding="utf-8"))["cameras"]
         if robot_cfg["type"] != "bi_piper" or set(cameras) != {"left", "right", "top"}:
             raise ValueError("Expected bi_piper and left/top/right cameras")
+        control = BiPiperConfig(
+            id=robot_cfg["id"],
+            left_port=robot_cfg["left_port"],
+            right_port=robot_cfg["right_port"],
+            command_rate_hz=float(robot_cfg["command_rate_hz"]),
+        )
         calibration = Path(robot_cfg["gripper_calibration_path"]).expanduser()
-        ranges = yaml.safe_load(calibration.read_text(encoding="utf-8"))
+        ranges = load_piper_gripper_calibrations(calibration)
+        if set(ranges) != {"left", "right"}:
+            raise ValueError(f"Both Piper grippers need calibration in {calibration}")
         urdf = Path(config["PIPER_URDF"]).expanduser()
-        kin, solver, readers, captures = {}, {}, {}, {}
+        if not urdf.is_absolute():
+            urdf = ROOT / urdf
+        kin, readers, captures = {}, {}, {}
         with ExitStack() as stack:
             for side in ("left", "right"):
                 kin[side] = PiperKinematics(urdf, config[f"PIPER_{side.upper()}_BASE"], config[f"PIPER_{side.upper()}_TCP"])
-                solver[side] = IncrementalDlsSolver(
-                    kin[side], rest_q=np.zeros(6), joint_lower_rad=kin[side].lower,
-                    joint_upper_rad=kin[side].upper, nominal_rate_hz=float(robot_cfg["command_rate_hz"]),
-                    speed_limits_rad_s=np.full(6, np.deg2rad(float(inference_cfg["max_joint_speed_deg_s"]))),
-                )
-                ends = ranges[side]
-                closed, opened = float(ends["closed_microm"]), float(ends["open_microm"])
-                if opened <= closed:
-                    raise ValueError(f"Invalid {side} gripper calibration")
-                readers[side] = Feedback(robot_cfg[f"{side}_port"], closed, opened)
-                stack.callback(readers[side].close)
+                readers[side] = PiperFeedbackArm(getattr(control, f"{side}_port"), ranges[side])
+                stack.callback(readers[side].disconnect)
             for name, spec in cameras.items():
                 captures[name] = open_camera(spec)
                 stack.callback(captures[name].release)
@@ -207,7 +176,7 @@ def main():
             time.sleep(0.2)
             state = {side: readers[side].read() for side in ("left", "right")}
             frames = {f"video.{role}": frame_b64(captures[name], cameras[name]) for name, role in (("left", "wrist_l"), ("top", "overhead"), ("right", "wrist_r"))}
-            observation = {"prompt": config["DREAM_PROMPT"]}
+            observation = {"prompt": args.prompt}
             for side in ("left", "right"):
                 q, grip = state[side]
                 pose = kin[side].forward_matrix(q)
@@ -225,13 +194,16 @@ def main():
             for side in ("left", "right"):
                 xyz = np.asarray(per_key[f"action.{side}_eef_xyz"], dtype=float)
                 rot6 = np.asarray(per_key[f"action.{side}_eef_rot6"], dtype=float)
-                if xyz.ndim != 2 or xyz.shape[1] != 3 or rot6.shape != (len(xyz), 6):
+                if xyz.ndim != 2 or xyz.shape[1] != 3 or len(xyz) == 0 or rot6.shape != (len(xyz), 6):
                     raise ValueError(f"Unexpected {side} EEF action shapes: {xyz.shape}, {rot6.shape}")
-                q = state[side][0].copy()
-                for point, rotation in zip(xyz, rot6):
-                    target = np.r_[point, rot6_to_quat(rotation)]
-                    q = solver[side].ik(q, target)
-                report[side] = {"steps": len(xyz), "initial_joints_rad": state[side][0].tolist(), "last_dls_joints_rad": q.tolist(), "first_eef_xyz_m": xyz[0].tolist()}
+                if not np.isfinite(xyz).all() or not np.isfinite(rot6).all():
+                    raise ValueError(f"Non-finite {side} EEF action")
+                report[side] = {
+                    "steps": len(xyz),
+                    "measured_joints_rad": state[side][0].tolist(),
+                    "first_eef_xyz_m": xyz[0].tolist(),
+                    "first_eef_rot6": rot6[0].tolist(),
+                }
             print(json.dumps(report, indent=2, default=str))
 
 

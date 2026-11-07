@@ -30,8 +30,8 @@ python tests/test_dream_api.py --models
 
 ## 4. Probar una inferencia
 
-Con los Piper, las cámaras y la calibración de pinzas configurados, captura una observación, solicita un bloque de acciones a Dream Labs y calcula objetivos articulares con `scripts/dls.py`. Usa el TCP nominal del URDF: en este archivo está a `0.145 m` de `link6`, mientras que el origen de los dedos está a `0.1358 m`. Es una prueba de API y geometría, no una validación del TCP físico. El script **no envía comandos a los motores**. La solicitud a la API puede generar cargos.
+Con los Piper, las cámaras y la calibración de pinzas configurados, captura una observación y solicita un bloque de acciones a Dream Labs. Lee los joints y las pinzas mediante `scripts/driver.py`, y muestra las poses EEF que devuelve el checkpoint YAM. Usa los TCP nominales del URDF solo para describir el estado actual. El script **no convierte las acciones a joints ni envía comandos a los motores**. Para mover los Piper hará falta validar los TCP físicos y la conversión IK; el control articular está en `scripts/piper.py` y `scripts/driver.py`. La solicitud a la API puede generar cargos.
 
 ```bash
-python tests/test_dream_api.py --infer
+python tests/test_dream_api.py --infer --prompt "pick up the soft object"
 ```
