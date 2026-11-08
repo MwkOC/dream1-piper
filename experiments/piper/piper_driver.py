@@ -1,4 +1,9 @@
-"""Dream custom driver for Piper feedback only; never enables or commands motors."""
+"""Read-only Piper driver implementing Dream's public custom-driver contract.
+
+Dream's official station owns the lifecycle and control loop. This module only
+maps Piper feedback into radians and normalized gripper opening, and refuses all
+targets until an active driver is deliberately designed and validated.
+"""
 
 from __future__ import annotations
 
@@ -12,35 +17,34 @@ import yaml
 from robots import errors, followers
 
 
-class ReadOnlyArm(followers.Driver):
-    """Native J1..J6 radians, following XHUMAN's modern Piper driver.
-
-    This class cannot operate a robot. Use only for feedback/contract checks.
-    Gripper endpoints come from XHUMAN's measured calibration, never a guess.
-    """
+class PiperArm(followers.Driver):
+    """Feedback-only Piper arm; it never enables, commands, or powers motors."""
 
     def __init__(self, cfg, side: str) -> None:
         if side not in ("left", "right"):
-            raise errors.ArmError("ReadOnlyArm requires a known side; use manual setup, not arm discovery")
+            raise errors.ArmError("PiperArm requires a known left/right side")
         if len(cfg.home) != 6:
             raise errors.ArmError("Piper requires six joints per arm")
-        source = os.environ.get("XHUMAN_PIPER_GRIPPER_CALIBRATION")
-        calibration = Path(source).expanduser() if source else (
+
+        calibration_path = os.environ.get("XHUMAN_PIPER_GRIPPER_CALIBRATION")
+        calibration = Path(calibration_path).expanduser() if calibration_path else (
             Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
             / "xhuman/piper_grippers.yaml"
         )
-        ranges = yaml.safe_load(calibration.read_text(encoding="utf-8"))
-        self._closed = float(ranges[side]["closed_microm"])
-        self._opened = float(ranges[side]["open_microm"])
+        ranges = yaml.safe_load(calibration.read_text(encoding="utf-8")) or {}
+        try:
+            self._closed = float(ranges[side]["closed_microm"])
+            self._opened = float(ranges[side]["open_microm"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise errors.ArmError("Piper gripper calibration is missing measured endpoints") from error
         if not np.isfinite([self._closed, self._opened]).all() or self._opened <= self._closed:
             raise errors.ArmError("Invalid measured Piper gripper endpoints")
 
-        # The normal XHUMAN constructors enable motors; open the SDK receive path directly.
         from piper_sdk import C_PiperInterface_V2
 
         self._sdk = C_PiperInterface_V2(cfg.can_channel)
         self._closed_device = False
-        self._stamps = [None, None]
+        self._stamps: list[float | None] = [None, None]
         self._received = [time.monotonic(), time.monotonic()]
         try:
             self._sdk.ConnectPort(piper_init=False)
@@ -76,11 +80,10 @@ class ReadOnlyArm(followers.Driver):
         opening = (float(grip.gripper_state.grippers_angle) - self._closed) / (self._opened - self._closed)
         if not np.isfinite(positions).all() or not np.isfinite(opening) or not -0.02 <= opening <= 1.02:
             raise errors.ArmError("Invalid Piper feedback or gripper outside measured travel")
-        # shortcut: velocity is unavailable on this feedback-only path; do not use it for control.
         return followers.Reading(positions, np.zeros(6), float(np.clip(opening, 0, 1)))
 
     def write(self, positions_rad, gripper: float) -> None:
-        raise errors.ArmError("ReadOnlyArm refuses every motor target; use --dry-run")
+        raise errors.ArmError("PiperArm is read-only and refuses every motor target")
 
     def close(self) -> None:
         if not self._closed_device:
@@ -88,5 +91,5 @@ class ReadOnlyArm(followers.Driver):
             self._closed_device = True
 
     def torque_off(self) -> None:
-        # A read-only adapter must not change the motor power state on station exit.
         self.close()
+

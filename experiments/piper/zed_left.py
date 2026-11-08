@@ -1,4 +1,6 @@
-"""Dream camera source: the same ZED Mini UVC left-eye crop XHUMAN uses."""
+"""ZED Mini UVC source used by the official Dream camera reader."""
+
+from __future__ import annotations
 
 import os
 
@@ -6,10 +8,7 @@ import cv2
 
 
 class ZedLeft:
-    """Input mode 1344x376 stereo; output one 672x376 BGR eye.
-
-    Config width is the output width. Do not apply to an already monocular stream.
-    """
+    """Capture 1344x376 stereo and return only the 672x376 left eye."""
 
     def __init__(self, cfg) -> None:
         self._width, self._height = cfg.width, cfg.height
@@ -31,7 +30,8 @@ class ZedLeft:
         expected = (self._height, self._width * 2, 3)
         if frame is None or frame.shape != expected:
             raise RuntimeError(f"Expected stereo frame {expected}; got {None if frame is None else frame.shape}")
-        return True, frame[:, :self._width].copy()
+        return True, frame[:, : self._width].copy()
 
     def release(self) -> None:
         self._capture.release()
+

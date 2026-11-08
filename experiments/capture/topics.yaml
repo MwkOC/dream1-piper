@@ -1,0 +1,11 @@
+storage_id: mcap
+topics:
+  overhead_rgb: /camera/overhead/image_raw
+  overhead_depth: /camera/overhead/depth
+  wrist_l_rgb: /camera/wrist_l/image_raw
+  wrist_r_rgb: /camera/wrist_r/image_raw
+  left_joint_state: /left/joint_states
+  right_joint_state: /right/joint_states
+  tf: /tf
+  tf_static: /tf_static
+
