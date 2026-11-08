@@ -4,7 +4,16 @@ __pycache__/
 .venv/
 .env
 .env.*
+!.env.example
+!app/.env.example
+!experiments/.env.example
 credentials
 credentials.*
 outputs/
+experiments/data/
 node_modules/
+
+# Referencias externas: conservar únicamente la propuesta de configuraciones.
+.references/*
+!.references/
+!.references/Tareas-con-Piper-Referencias.md

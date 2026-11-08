@@ -1,0 +1,40 @@
+[project]
+name = "dream1-piper-experiments"
+version = "0.1.0"
+description = "Piper driver-template and ROS 2 capture experiments"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "numpy>=2.2,<3",
+    "opencv-python-headless>=4.10,<5",
+    "scipy>=1.14,<2",
+    "pyyaml>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dream = [
+    "dreamlabs==1.0.18",
+]
+api = [
+    "dreamlabs-client==1.0.9",
+]
+hardware = [
+    "piper_sdk>=0.2.0",
+]
+dev = [
+    "pytest>=8.3,<10",
+]
+
+[project.scripts]
+record-piper-episode = "capture.record_episode:main"
+dream-piper-models = "piper.dream_probe:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["capture", "piper"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
