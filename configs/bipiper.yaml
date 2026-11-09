@@ -1,5 +1,4 @@
-# Shared hardware settings for VR and hardware tools.
-# The inference section below supplies deployment-specific overrides.
+# Piper hardware settings. Camera devices are configured separately in cameras.yaml.
 robot:
   type: bi_piper
   id: bi_piper
@@ -14,40 +13,3 @@ robot:
   max_joint_speed_deg_s: 180.0
   max_joint_acceleration_deg_s2: 720.0
   speed_percent: 80
-
-# Applied only by the inference robot server; VR/tools use robot above.
-inference:
-  robot:
-    gripper_action_tolerance: 0.2
-    max_joint_speed_deg_s: 20.0
-    max_joint_acceleration_deg_s2: 60.0
-    speed_percent: 40
-    cameras:
-      left:
-        type: opencv
-        index_or_path: /dev/v4l/by-path/pci-0000:06:00.4-usb-0:1:1.0-video-index0
-        width: 640
-        height: 480
-        fps: 30
-        backend: V4L2
-      top:
-        type: zedmini
-        index_or_path: /dev/v4l/by-path/pci-0000:06:00.3-usb-0:1:1.0-video-index0
-        width: 1344
-        height: 376
-        fps: 30
-        backend: V4L2
-      right:
-        type: opencv
-        index_or_path: /dev/v4l/by-path/pci-0000:06:00.4-usb-0:2:1.0-video-index0
-        width: 640
-        height: 480
-        fps: 30
-        backend: V4L2
-  motion_filter:
-    enabled: true
-    min_cutoff_hz: 2.0
-    velocity_coefficient: 3.0
-    derivative_cutoff_hz: 5.0
-    gripper_max_rate_per_s: 3.0
-    snap_tolerance: 0.001

@@ -43,4 +43,4 @@ Ambas interfaces deben indicar `state UP` antes de iniciar `robot_server.py` o l
 v4l2-ctl --list-devices
 ```
 
-Compara los dispositivos detectados con las rutas `index_or_path` de [cameras.yaml](cameras.yaml) y [bipiper.yaml](bipiper.yaml). Ajusta esas rutas si los puertos V4L2 de este computador son diferentes.
+Compara los dispositivos detectados con las rutas `index_or_path` de [cameras.yaml](cameras.yaml). Ajusta esas rutas si los puertos V4L2 de este computador son diferentes. Los puertos CAN y la calibración de las pinzas se configuran aparte en [bipiper.yaml](bipiper.yaml).
