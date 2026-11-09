@@ -17,3 +17,4 @@ node_modules/
 .references/*
 !.references/
 !.references/Tareas-con-Piper-Referencias.md
+secrets/
