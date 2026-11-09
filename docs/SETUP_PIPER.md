@@ -8,15 +8,14 @@ La [guía de instalación](../TUTORIAL_INSTALACION.md) incluye los comandos comp
 
 | Archivo | Función |
 | --- | --- |
-| [station.readonly.yaml](../integrations/piper/station.readonly.yaml) | Estación custom de dos Piper y tres cámaras |
-| [piper_readonly.py](../integrations/piper/piper_readonly.py) | Feedback CAN, radianes y pinza; rechaza cualquier objetivo de motor |
-| [zed_left.py](../integrations/piper/zed_left.py) | Recorta el ojo izquierdo de una captura UVC estéreo ZED |
-| [arm.pending.json](../integrations/piper/arm.pending.json) | Cadena URDF candidata; TCP, ejes y rest aún pendientes |
-| [handumi_reference.yaml](../integrations/piper/handumi_reference.yaml) | Valores importados y revisión de HandUMI |
+| [`experiments/piper/robot.py`](../experiments/piper/robot.py) | Robot individual y bimanual activo |
+| [`experiments/piper/active_driver.py`](../experiments/piper/active_driver.py) | Conexión CAN, habilitación, streaming y diagnósticos |
+| [`experiments/piper/kinematics.py`](../experiments/piper/kinematics.py) | FK/IK sobre el URDF dual |
+| [`experiments/piper/hardware_config.yaml`](../experiments/piper/hardware_config.yaml) | Puertos, cámaras, límites y frames |
 
-El driver no habilita motores. Su `torque_off()` solo cierra la conexión: no es un
-driver activo ni implementa la deshabilitación física. Consultar
-[DRIVER_STATUS.md](DRIVER_STATUS.md) antes de preparar control real.
+El driver activo de `experiments/piper` sí puede habilitar motores y enviar
+objetivos. Consultar [DRIVER_STATUS.md](DRIVER_STATUS.md) antes de preparar
+control real.
 
 ## Configuración confirmada
 
@@ -42,7 +41,7 @@ YAM o Maker como sustituto de Piper. El editor local independiente se abre con:
 
 ```bash
 source .venv/bin/activate
-dreamcli --home "$PWD/integrations/piper" tcp --host 127.0.0.1
+dreamcli --home "$PWD/experiments/piper" tcp --host 127.0.0.1
 ```
 
 Los assets del URDF se encuentran en el workspace HandUMI, fuera de este repo.
@@ -67,16 +66,15 @@ feedback SDK de miligrados mediante `pi / 180000`. El antiguo
 `bi_piper_follower` usa posiciones normalizadas [-100,100] y otras conversiones;
 no mezclar valores ni duplicar sus inversiones de signo.
 
-El driver de lectura espera una calibración medida por lado con `closed_microm`
+El driver activo espera una calibración medida por lado con `closed_microm`
 y `open_microm`, en `$XHUMAN_PIPER_GRIPPER_CALIBRATION` o, por defecto,
 `${XDG_CACHE_HOME:-~/.cache}/xhuman/piper_grippers.yaml`. En este equipo no se
 encontró ese archivo. El formato de HandUMI guarda solo `closed_microm`, por lo
 que no basta con apuntar al YAML de HandUMI.
 
-El driver rechaza feedback ausente, antiguo y no finito. Reporta velocidad cero
-porque esta implementación solo comprueba posiciones y apertura; no debe usarse
-como sensor de velocidad de un controlador activo. Para leer CAN se requiere
-además el SDK Piper; el editor TCP y las pruebas offline no lo necesitan.
+El driver rechaza feedback ausente y valores no finitos. El streamer limita
+velocidad y aceleración, propaga errores del hilo de control y requiere el SDK
+Piper para leer CAN. El editor TCP y las pruebas offline no lo necesitan.
 
 ## ZED y óptica
 

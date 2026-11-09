@@ -1,12 +1,12 @@
 # Dream-1 → NONHUMAN / XHUMAN
 
-Plan inicial de adaptación, revisado el 2026-11-07. Los componentes propuestos
-que no aparecen en `integrations/piper/` siguen pendientes; el driver actual es
-de solo lectura. El SDK se instala desde PyPI, sin una copia de su monorepo aquí.
+Plan inicial de adaptación, revisado el 2026-11-07. La implementación activa
+experimental vive en `experiments/piper`; el SDK se instala desde PyPI, sin una
+copia de su monorepo aquí.
 
-Actualización 2026-10-29: se preparó una [integración Piper de solo lectura y guía
-de setup custom](SETUP_PIPER.md). Incluye plantilla de estación,
-selección de cadena URDF, fuente ZED monocular y pruebas offline. El driver moderno
+Actualización: se consolidó el driver activo y la [guía de setup Piper](SETUP_PIPER.md).
+Incluye selección de cadena URDF, fuente ZED monocular, streaming limitado y
+pruebas offline. El driver moderno
 `xhuman/robots/piper/driver.py` ya trabaja en radianes; la conversión normalizada
 descrita más abajo corresponde específicamente a `bi_piper_follower`. No existe
 todavía un adaptador activo validado con hardware ni un puente Dream por WebSocket.

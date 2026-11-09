@@ -19,10 +19,20 @@ class PiperConfig:
     frames: dict[str, str]
     cameras: dict[str, dict[str, Any]]
     command_rate_hz: float
+    max_joint_speed_deg_s: float
+    max_joint_acceleration_deg_s2: float
+    startup_speed_percent: int
     speed_percent: int
+    enable_timeout_s: float
+    gripper_effort: int
+    gripper_action_tolerance: float
+    home_max_joint_speed_deg_s: float
+    home_timeout_s: float
+    home_tolerance_deg: float
+    inference_start: dict[str, Any]
 
     @classmethod
-    def from_file(cls, path: Path) -> "PiperConfig":
+    def from_file(cls, path: Path) -> PiperConfig:
         source = Path(path).expanduser().resolve()
         document = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
         robot = document.get("robot")
@@ -51,7 +61,17 @@ class PiperConfig:
             frames={str(k): str(v) for k, v in frames.items()},
             cameras=cameras,
             command_rate_hz=float(robot.get("command_rate_hz", 100.0)),
+            max_joint_speed_deg_s=float(robot.get("max_joint_speed_deg_s", 180.0)),
+            max_joint_acceleration_deg_s2=float(robot.get("max_joint_acceleration_deg_s2", 720.0)),
+            startup_speed_percent=int(robot.get("startup_speed_percent", 10)),
             speed_percent=int(robot.get("speed_percent", 80)),
+            enable_timeout_s=float(robot.get("enable_timeout_s", 10.0)),
+            gripper_effort=int(robot.get("gripper_effort", 1000)),
+            gripper_action_tolerance=float(robot.get("gripper_action_tolerance", 0.1)),
+            home_max_joint_speed_deg_s=float(robot.get("home_max_joint_speed_deg_s", 20.0)),
+            home_timeout_s=float(robot.get("home_timeout_s", 30.0)),
+            home_tolerance_deg=float(robot.get("home_tolerance_deg", 3.0)),
+            inference_start=document.get("inference", {}).get("start", {}) or {},
         )
 
 

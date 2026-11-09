@@ -1,13 +1,13 @@
 # Dream-1 Piper
 
 Proyecto para separar una aplicación FastAPI de los experimentos de captura y
-la adaptación read-only para brazos AgileX Piper.
+la integración activa experimental para brazos AgileX Piper.
 
 ## Estructura
 
 - [`app/`](app/): aplicación FastAPI y contratos de validación.
-- [`experiments/`](experiments/): captura ROS 2/MCAP, driver Piper read-only y
-  configuración experimental.
+- [`experiments/`](experiments/): captura ROS 2/MCAP, driver activo Piper,
+  streaming, IK y configuración experimental.
 - [`docs/`](docs/): documentación de instalación, estado y arquitectura.
 - [`.references/`](.references/): material externo; solo se versiona la
   propuesta de configuraciones.
@@ -43,6 +43,7 @@ PYTHONPATH="$PWD/app/src:$PWD/experiments" python3 -m pytest app/tests experimen
 
 ## Seguridad
 
-El driver Piper es exclusivamente read-only. No se ejecutan motores, inferencia
-remota ni control autónomo; las calibraciones físicas y el control activo siguen
-pendientes de validación.
+El driver activo puede habilitar motores y enviar comandos. La inferencia no
+mueve hardware salvo que se solicite explícitamente con `--execute`; antes de
+ejecutar se valida todo el chunk mediante IK. Las calibraciones físicas y la
+validación supervisada del robot siguen siendo obligatorias.

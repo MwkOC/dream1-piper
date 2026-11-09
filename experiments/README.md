@@ -1,8 +1,8 @@
 # Experiments
 
-This folder contains the project-specific integration around Dream Labs'
-installed packages. It does not contain the Dream Labs source tree or copy the
-Dream station, policy client, pacing, IK, or action loop.
+This folder contains the active Piper integration around Dream Labs' installed
+packages. It does not contain the Dream Labs source tree or copy the Dream
+station or policy client.
 
 ## Install
 
@@ -23,11 +23,15 @@ No Dream Labs source tree is included in this repository or added through
 ## Piper driver and configuration
 
 `piper/hardware_config.yaml` is the extracted `bi_piper` configuration from
-`origin/temasA` (`e67a701`, `9426238`). It declares `can0`/`can1`, calibration,
-camera roles, limits and URDF frames. `piper/active_driver.py` is the local
-Piper CAN boundary; constructing `PiperSdkArm` enables the arm and can send
-commands. The separate `piper/piper_driver.py` remains the feedback-only
-adapter for Dream's custom-driver contract.
+`origin/temasA`. It declares `can0`/`can1`, calibration, camera roles, limits,
+inference startup and URDF frames. `piper/active_driver.py` is the consolidated
+CAN boundary: `PiperSdkArm` enables the arm after feedback seeding and
+`PiperJointStreamer` applies velocity and acceleration limits.
+
+`piper/robot.py` exposes `Piper` and `BiPiper`, including transactional
+connection, safe disconnect, home/reset handling and telemetry snapshots.
+Instantiating these classes can enable motors and send commands; use them only
+on the robot host with supervision.
 
 The local robot ID is `bi_piper`. It is not a Dream Labs embodiment ID. The
 Dream probe keeps `other_embodiment` until a real remote embodiment is supplied.
@@ -40,15 +44,17 @@ set -a; . .env; set +a
 dream-piper-models --models
 ```
 
-For the feedback-only official station template, retain `--dry-run` until the
-TCP, calibration and hardware procedure are confirmed:
+To inspect one Dream action chunk without moving motors:
 
 ```bash
-dreamcli robot run \
-  --config experiments/piper/station.readonly.yaml \
-  --checkpoint '<REAL_CHECKPOINT>' \
-  --task 'pick up the soft object' \
-  --dry-run
+dream-piper-models --infer --prompt 'pick up the soft object'
+```
+
+`--execute` is an explicit hardware action. It validates the complete EEF
+chunk through IK before enabling either arm:
+
+```bash
+dream-piper-models --infer --execute --prompt 'pick up the soft object'
 ```
 
 ## Raw ROS capture

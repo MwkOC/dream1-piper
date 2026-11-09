@@ -14,6 +14,9 @@ robot:
   enable_timeout_s: 10.0
   gripper_effort: 1000
   gripper_action_tolerance: 0.1
+  home_max_joint_speed_deg_s: 20.0
+  home_timeout_s: 30.0
+  home_tolerance_deg: 3.0
 
   cameras:
     left:
@@ -41,3 +44,12 @@ frames:
   left_tcp: left_tcp
   right_base: right_base_link
   right_tcp: right_tcp
+
+inference:
+  start:
+    enabled: false
+    pose_file: null
+    pose: nearest_to_mean
+    max_joint_speed_deg_s: 10.0
+    timeout_s: 45.0
+    tolerance_deg: 2.0
