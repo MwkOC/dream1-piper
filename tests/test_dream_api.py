@@ -1,6 +1,8 @@
-"""One-shot, read-only Dream Labs API probe for the bimanual Piper.
+"""Dream Labs API probe with opt-in EEF-to-joint Piper execution.
 
-Usage: python tests/test_dream_api.py --models | --infer --prompt "..."
+Usage: python tests/test_dream_api.py --models
+       python tests/test_dream_api.py --infer --prompt "..."
+       python tests/test_dream_api.py --infer --execute --prompt "..."
 """
 
 import argparse
@@ -9,70 +11,19 @@ import json
 from pathlib import Path
 import sys
 import time
-import xml.etree.ElementTree as ET
 from contextlib import ExitStack
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.driver import PiperFeedbackArm
+from scripts.driver import PiperFeedbackArm, PiperJointStreamer, PiperSdkArm
+from scripts.constants import PIPER_JOINT_LOWER_RAD, PIPER_JOINT_UPPER_RAD
 from scripts.gripper_calibration import load_piper_gripper_calibrations
+from scripts.kinematics import PiperKinematics
 from scripts.piper import BiPiperConfig
-
-
-def _tr(xyz, rpy):
-    result = np.eye(4)
-    result[:3, :3] = Rotation.from_euler("xyz", rpy).as_matrix()
-    result[:3, 3] = xyz
-    return result
-
-
-class PiperKinematics:
-    def __init__(self, urdf: Path, base: str, tcp_link: str):
-        root = ET.parse(urdf).getroot()
-        by_child = {joint.find("child").get("link"): joint for joint in root.findall("joint")}
-        chain = []
-        link = tcp_link
-        while link != base:
-            if link not in by_child:
-                raise ValueError(f"No URDF chain from {base} to {tcp_link}")
-            joint = by_child[link]
-            chain.append(joint)
-            link = joint.find("parent").get("link")
-            if len(chain) > 100:
-                raise ValueError("URDF chain contains a cycle")
-        self.chain = list(reversed(chain))
-        moving = [j for j in self.chain if j.get("type") != "fixed"]
-        if len(moving) != 6 or any(j.get("type") != "revolute" for j in moving):
-            raise ValueError("Piper chain must contain exactly six revolute joints")
-        self.joint_names = [j.get("name") for j in moving]
-        self.lower = np.array([float(j.find("limit").get("lower")) for j in moving])
-        self.upper = np.array([float(j.find("limit").get("upper")) for j in moving])
-        if np.any(self.lower >= self.upper):
-            raise ValueError("Invalid URDF joint limits")
-
-    def _chain(self, q):
-        t = np.eye(4)
-        index = 0
-        for joint in self.chain:
-            origin = joint.find("origin")
-            xyz = np.fromstring(origin.get("xyz", "0 0 0"), sep=" ") if origin is not None else np.zeros(3)
-            rpy = np.fromstring(origin.get("rpy", "0 0 0"), sep=" ") if origin is not None else np.zeros(3)
-            t = t @ _tr(xyz, rpy)
-            if joint.get("type") == "fixed":
-                continue
-            axis_node = joint.find("axis")
-            axis = np.fromstring(axis_node.get("xyz", "1 0 0"), sep=" ") if axis_node is not None else np.array([1., 0., 0.])
-            t[:3, :3] = t[:3, :3] @ Rotation.from_rotvec(axis * float(q[index])).as_matrix()
-            index += 1
-        return t
-
-    def forward_matrix(self, joints):
-        return self._chain(joints)
 
 
 def settings():
@@ -128,11 +79,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument("--models", action="store_true", help="Check key and list accessible checkpoints")
-    choice.add_argument("--infer", action="store_true", help="Capture one observation and request one action chunk; no motor commands")
+    choice.add_argument("--infer", action="store_true", help="Capture an observation and request one action chunk")
     parser.add_argument("--prompt", help="Instruction for the inference observation")
+    parser.add_argument("--execute", action="store_true", help="Move both Piper arms along the returned EEF action chunk")
     args = parser.parse_args()
     if args.infer and (not args.prompt or not args.prompt.strip()):
         parser.error("--infer requires a non-empty --prompt")
+    if args.execute and not args.infer:
+        parser.error("--execute requires --infer")
     if args.models and args.prompt is not None:
         parser.error("--prompt is only valid with --infer")
     config = settings()
@@ -163,12 +117,20 @@ def main():
         urdf = Path(config["PIPER_URDF"]).expanduser()
         if not urdf.is_absolute():
             urdf = ROOT / urdf
-        kin, readers, captures = {}, {}, {}
+        kin, readers, captures, streamers = {}, {}, {}, {}
         with ExitStack() as stack:
             for side in ("left", "right"):
-                kin[side] = PiperKinematics(urdf, config[f"PIPER_{side.upper()}_BASE"], config[f"PIPER_{side.upper()}_TCP"])
+                kin[side] = PiperKinematics(
+                    urdf,
+                    config[f"PIPER_{side.upper()}_BASE"],
+                    config[f"PIPER_{side.upper()}_TCP"],
+                    side,
+                )
                 readers[side] = PiperFeedbackArm(getattr(control, f"{side}_port"), ranges[side])
-                stack.callback(readers[side].disconnect)
+                stack.callback(
+                    lambda side=side: readers[side].disconnect()
+                    if readers.get(side) is not None else None
+                )
             for name, spec in cameras.items():
                 captures[name] = open_camera(spec)
                 stack.callback(captures[name].release)
@@ -191,6 +153,8 @@ def main():
             action = client.get_action()
             per_key = action["per_key"]
             report = {"checkpoint": config["DREAM_CHECKPOINT"], "action_keys": sorted(per_key), "timing": client.last_timing}
+            solved = {"left": [], "right": []}
+            gripper_actions = {}
             for side in ("left", "right"):
                 xyz = np.asarray(per_key[f"action.{side}_eef_xyz"], dtype=float)
                 rot6 = np.asarray(per_key[f"action.{side}_eef_rot6"], dtype=float)
@@ -203,6 +167,75 @@ def main():
                     "measured_joints_rad": state[side][0].tolist(),
                     "first_eef_xyz_m": xyz[0].tolist(),
                     "first_eef_rot6": rot6[0].tolist(),
+                }
+                if args.execute:
+                    current_q = state[side][0].copy()
+                    for point, orientation in zip(xyz, rot6):
+                        q, position_error, rotation_error = kin[side].solve(
+                            point, orientation, current_q
+                        )
+                        if np.any(q < PIPER_JOINT_LOWER_RAD) or np.any(q > PIPER_JOINT_UPPER_RAD):
+                            raise ValueError(f"{side} IK solution exceeds physical Piper joint limits")
+                        solved[side].append((q, position_error, rotation_error))
+                        current_q = q
+                    for name in (f"action.{side}_gripper", f"action.{side}_grip"):
+                        if name in per_key:
+                            values = np.asarray(per_key[name], dtype=float).reshape(-1)
+                            if len(values) != len(solved[side]) or not np.isfinite(values).all():
+                                raise ValueError(f"Unexpected gripper action values for {side}")
+                            if np.min(values) < -0.02 or np.max(values) > 1.02:
+                                raise ValueError(f"Dream gripper action for {side} is outside [0, 1]")
+                            # Calibration maps normalized aperture [0, 1] to Piper micrometers.
+                            # Limit aperture changes to 3 normalized units per second.
+                            previous = float(state[side][1])
+                            limited = []
+                            for value in np.clip(values, 0.0, 1.0):
+                                previous += float(np.clip(value - previous, -0.1, 0.1))
+                                limited.append(previous)
+                            gripper_actions[side] = np.asarray(limited)
+                            break
+            if args.execute and len(solved["left"]) != len(solved["right"]):
+                raise ValueError("Dream returned different action chunk lengths for left and right arms")
+            if args.execute:
+                # Do not enable either arm until the entire action chunk passed IK validation.
+                for side in ("left", "right"):
+                    readers[side].disconnect()
+                    readers[side] = None
+                    arm = PiperSdkArm(
+                        getattr(control, f"{side}_port"),
+                        speed_percent=40,
+                        gripper_range=ranges[side],
+                    )
+                    stack.callback(arm.disconnect)
+                    streamer = PiperJointStreamer(
+                        arm,
+                        command_rate_hz=100.0,
+                        max_joint_speed_deg_s=20.0,
+                        max_joint_acceleration_deg_s2=60.0,
+                    )
+                    streamers[side] = streamer
+                    streamer.start()
+                    stack.callback(streamer.stop)
+                frame_period = 1.0 / 30.0
+                frame_count = len(solved["left"])
+                for index in range(frame_count):
+                    started = time.monotonic()
+                    for side in ("left", "right"):
+                        q = solved[side][index][0]
+                        grip = float(gripper_actions[side][index]) if side in gripper_actions else None
+                        streamers[side].set_target(q, grip)
+                    time.sleep(max(0.0, frame_period - (time.monotonic() - started)))
+                report["execution"] = {
+                    "status": "action chunk streamed",
+                    "steps": frame_count,
+                    "max_position_ik_error_m": max(
+                        (item[1] for values in solved.values() for item in values), default=0.0
+                    ),
+                    "max_orientation_ik_error_deg": float(np.rad2deg(max(
+                        (item[2] for values in solved.values() for item in values), default=0.0
+                    ))),
+                    "gripper_actions": sorted(gripper_actions),
+                    "joint_speed_limit_deg_s": 20.0,
                 }
             print(json.dumps(report, indent=2, default=str))
 

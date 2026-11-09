@@ -30,8 +30,11 @@ python tests/test_dream_api.py --models
 
 ## 4. Probar una inferencia
 
-Con los Piper, las cámaras y la calibración de pinzas configurados, captura una observación y solicita un bloque de acciones a Dream Labs. Lee los joints y las pinzas mediante `scripts/driver.py`, y muestra las poses EEF que devuelve el checkpoint YAM. Usa los TCP nominales del URDF solo para describir el estado actual. El script **no convierte las acciones a joints ni envía comandos a los motores**. Para mover los Piper hará falta validar los TCP físicos y la conversión IK; el control articular está en `scripts/piper.py` y `scripts/driver.py`. La solicitud a la API puede generar cargos.
+Con los Piper, las cámaras y la calibración de pinzas configurados, captura una observación y solicita un bloque de acciones a Dream Labs. Por defecto, la prueba solo muestra la respuesta. Para ejecutar el bloque, añade `--execute`: calcula IK a partir de `assets/piper/piper.urdf`, usa los límites de `scripts/constants.py`, convierte las aperturas de pinza normalizadas con la calibración local y envía objetivos al `PiperJointStreamer` de `scripts/driver.py`. El modo de ejecución limita la velocidad articular a 20 grados por segundo, la aceleración a 60 grados por segundo cuadrado y la apertura de pinza a 3 unidades normalizadas por segundo. Primero valida todas las poses del bloque; si alguna no es alcanzable dentro de 2 cm y 10 grados, aborta antes de habilitar los brazos. Antes de usarlo en el robot real, confirma que los TCP nominales y la convención de rotación del URDF coincidan con el Piper físico. La solicitud a la API puede generar cargos.
 
 ```bash
 python tests/test_dream_api.py --infer --prompt "pick up the soft object"
+
+# Solo cuando quieras enviar movimiento a los brazos:
+python tests/test_dream_api.py --infer --execute --prompt "pick up the soft object"
 ```
