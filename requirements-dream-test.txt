@@ -3,4 +3,4 @@ numpy>=1.26,<3
 scipy>=1.11
 PyYAML>=6
 opencv-python>=4.8
-piper-sdk
+piper_sdk @ git+https://github.com/agilexrobotics/piper_sdk.git
