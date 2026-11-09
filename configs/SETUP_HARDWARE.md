@@ -17,13 +17,12 @@ Los identificadores previstos en esta configuración son `1-5:1.0` para el brazo
 
 ## 3. Activar CAN a 1 Mbps
 
-El instalador del proyecto deja `can_activate.sh` en `.venv/lib/python3.12/site-packages/piper_sdk/`.
+El instalador del proyecto deja `can_activate.sh` dentro del paquete `piper_sdk` de `.venv`. Ejecuta estos comandos por separado desde la raíz del proyecto; la primera línea obtiene la ruta real del script desde el entorno virtual.
 
 ```bash
-sudo bash .venv/lib/python3.12/site-packages/piper_sdk/can_activate.sh \
-  can0 1000000 1-5:1.0
-sudo bash .venv/lib/python3.12/site-packages/piper_sdk/can_activate.sh \
-  can1 1000000 1-6:1.0
+PIPER_SDK_SCRIPT=$(.venv/bin/python -c 'import pathlib, piper_sdk; print(pathlib.Path(piper_sdk.__file__).with_name("can_activate.sh"))')
+sudo bash "$PIPER_SDK_SCRIPT" can0 1000000 1-5:1.0
+sudo bash "$PIPER_SDK_SCRIPT" can1 1000000 1-6:1.0
 ```
 
 Sustituye `1-5:1.0` y `1-6:1.0` si los identificadores obtenidos en el paso 2 son diferentes.
