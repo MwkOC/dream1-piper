@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps([{"id": model.id, "servable": getattr(model, "servable", None)} for model in models]))
             return 0
 
-        config = PiperConfig.from_file(Path(__file__).with_name("hardware_config.yaml"))
+        config = PiperConfig.from_file(Path(__file__).resolve().parents[2] / "configs" / "bipiper.yaml")
         calibrations = load_piper_gripper_calibrations(config.calibration_path)
         if set(calibrations) != {"left", "right"}:
             raise ValueError(f"Both grippers require calibration at {config.calibration_path}")

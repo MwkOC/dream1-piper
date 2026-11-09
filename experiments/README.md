@@ -22,9 +22,10 @@ No Dream Labs source tree is included in this repository or added through
 
 ## Piper driver and configuration
 
-`piper/hardware_config.yaml` is the extracted `bi_piper` configuration from
-`origin/temasA`. It declares `can0`/`can1`, calibration, camera roles, limits,
-inference startup and URDF frames. `piper/active_driver.py` is the consolidated
+`../configs/bipiper.yaml` is the single `bi_piper` configuration. It declares
+`can0`/`can1`, calibration, camera roles and limits. The Piper TCP/base frames
+are read from the repository URDF by the active config loader.
+`piper/active_driver.py` is the consolidated
 CAN boundary: `PiperSdkArm` enables the arm after feedback seeding and
 `PiperJointStreamer` applies velocity and acceleration limits.
 

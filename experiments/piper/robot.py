@@ -496,7 +496,7 @@ class BiPiperConfig(RobotConfig):
     gripper_action_tolerance: float = 0.1
     gripper_calibration_path: Path | None = None
     inference_start: PiperInferenceStartConfig = field(default_factory=PiperInferenceStartConfig)
-    config_path: Path = field(default_factory=lambda: Path(__file__).with_name("hardware_config.yaml"))
+    config_path: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2] / "configs" / "bipiper.yaml")
     robot_type: str = "bi_piper"
 
     def load(self):

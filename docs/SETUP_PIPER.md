@@ -11,7 +11,7 @@ La [guía de instalación](../TUTORIAL_INSTALACION.md) incluye los comandos comp
 | [`experiments/piper/robot.py`](../experiments/piper/robot.py) | Robot individual y bimanual activo |
 | [`experiments/piper/active_driver.py`](../experiments/piper/active_driver.py) | Conexión CAN, habilitación, streaming y diagnósticos |
 | [`experiments/piper/kinematics.py`](../experiments/piper/kinematics.py) | FK/IK sobre el URDF dual |
-| [`experiments/piper/hardware_config.yaml`](../experiments/piper/hardware_config.yaml) | Puertos, cámaras, límites y frames |
+| [`configs/bipiper.yaml`](../configs/bipiper.yaml) | Puertos, cámaras y límites; los frames vienen del URDF |
 
 El driver activo de `experiments/piper` sí puede habilitar motores y enviar
 objetivos. Consultar [DRIVER_STATUS.md](DRIVER_STATUS.md) antes de preparar
