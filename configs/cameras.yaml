@@ -3,7 +3,7 @@
 cameras:
   left:
     type: opencv
-    index_or_path: /dev/v4l/by-path/pci-0000:06:00.4-usb-0:1:1.0-video-index0
+    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:1:1.0-video-index0
     width: 640
     height: 480
     fps: 30
@@ -11,7 +11,7 @@ cameras:
 
   top:
     type: zedmini
-    index_or_path: /dev/v4l/by-path/pci-0000:06:00.3-usb-0:1:1.0-video-index0
+    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:3:1.0-video-index0
     # UVC exposes both 672x376 eyes side by side. The MU driver returns the left eye.
     width: 1344
     height: 376
@@ -20,7 +20,7 @@ cameras:
 
   right:
     type: opencv
-    index_or_path: /dev/v4l/by-path/pci-0000:06:00.4-usb-0:2:1.0-video-index0
+    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:2:1.0-video-index0
     width: 640
     height: 480
     fps: 30

@@ -52,7 +52,7 @@ class PiperConfig:
     inference_start: dict[str, Any]
 
     @classmethod
-    def from_file(cls, path: Path) -> PiperConfig:
+    def from_file(cls, path: Path, cameras_path: Path | None = None) -> PiperConfig:
         source = Path(path).expanduser().resolve()
         document = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
         robot = document.get("robot")
@@ -65,10 +65,23 @@ class PiperConfig:
         left, right = effective_robot.get("left_port"), effective_robot.get("right_port")
         if not left or not right or left == right:
             raise ValueError("left_port and right_port must be distinct")
-        cameras = effective_robot.get("cameras") or {}
+        camera_source = Path(cameras_path or source.with_name("cameras.yaml")).expanduser().resolve()
+        camera_document = yaml.safe_load(camera_source.read_text(encoding="utf-8")) if camera_source.is_file() else {}
+        if not isinstance(camera_document, dict):
+            raise ValueError(f"camera configuration must be a mapping: {camera_source}")
+        cameras = effective_robot.get("cameras") or camera_document.get("cameras") or {}
         if set(cameras) != {"left", "right", "top"}:
-            raise ValueError("configuration must define left, top and right cameras")
-        urdf = _DEFAULT_URDF
+            raise ValueError(
+                "configuration must define left, top and right cameras in the robot config or cameras.yaml"
+            )
+        urdf_value = effective_robot.get("urdf")
+        if urdf_value:
+            urdf = Path(str(urdf_value)).expanduser()
+            urdf = (source.parent / urdf).resolve() if not urdf.is_absolute() else urdf.resolve()
+        else:
+            urdf = _DEFAULT_URDF
+        if not urdf.is_file():
+            raise ValueError(f"Piper URDF does not exist: {urdf}")
         frames = _urdf_frames(urdf)
         calibration = Path(str(effective_robot.get("gripper_calibration_path", ""))).expanduser()
         return cls(

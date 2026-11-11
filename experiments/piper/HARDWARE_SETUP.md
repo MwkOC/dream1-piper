@@ -1,10 +1,10 @@
 # Preparar el computador del robot
 
-Ejecuta los comandos desde la raíz del proyecto: `/home/aniela/NONHUMAN/dream1-piper`.
+Ejecuta los comandos desde la raíz del repositorio.
 
 ## 1. Conectar los brazos
 
-Conecta el adaptador CAN del brazo izquierdo como `can0` y el del derecho como `can1`. Esta asignación coincide con `robot.left_port` y `robot.right_port` en [bipiper.yaml](bipiper.yaml).
+Conecta el adaptador CAN del brazo izquierdo como `can1` y el del derecho como `can0`. Esta asignación coincide con `robot.left_port` y `robot.right_port` en [`bipiper.yaml`](../../configs/bipiper.yaml).
 
 ## 2. Identificar los adaptadores CAN
 
@@ -13,7 +13,8 @@ sudo ethtool -i can0 | grep bus-info
 sudo ethtool -i can1 | grep bus-info
 ```
 
-Los identificadores previstos en esta configuración son `1-5:1.0` para el brazo izquierdo y `1-6:1.0` para el derecho. Si tu computador muestra otros valores, usa **los valores que devuelve `bus-info`** en el paso siguiente.
+Los identificadores previstos son los que devuelva `bus-info`; no reutilices
+valores de otro computador. Usa **los valores detectados** en el paso siguiente.
 
 ## 3. Activar CAN a 1 Mbps
 
@@ -21,8 +22,8 @@ El instalador del proyecto deja `can_activate.sh` dentro del paquete `piper_sdk`
 
 ```bash
 PIPER_SDK_SCRIPT=$(.venv/bin/python -c 'import pathlib, piper_sdk; print(pathlib.Path(piper_sdk.__file__).with_name("can_activate.sh"))')
-sudo bash "$PIPER_SDK_SCRIPT" can0 1000000 1-5:1.0
-sudo bash "$PIPER_SDK_SCRIPT" can1 1000000 1-6:1.0
+sudo bash "$PIPER_SDK_SCRIPT" can0 1000000 1-3.1.2:1.0
+sudo bash "$PIPER_SDK_SCRIPT" can1 1000000 1-3.1.1:1.0
 ```
 
 Sustituye `1-5:1.0` y `1-6:1.0` si los identificadores obtenidos en el paso 2 son diferentes.
@@ -42,4 +43,4 @@ Ambas interfaces deben indicar `state UP` antes de iniciar `robot_server.py` o l
 v4l2-ctl --list-devices
 ```
 
-Compara los dispositivos detectados con las rutas `index_or_path` de [cameras.yaml](cameras.yaml). Ajusta esas rutas si los puertos V4L2 de este computador son diferentes. Los puertos CAN y la calibración de las pinzas se configuran aparte en [bipiper.yaml](bipiper.yaml).
+Compara los dispositivos detectados con las rutas `index_or_path` de [`cameras.yaml`](../../configs/cameras.yaml). Ajusta esas rutas si los puertos V4L2 de este computador son diferentes. Los puertos CAN y la calibración de las pinzas se configuran aparte en [`bipiper.yaml`](../../configs/bipiper.yaml).

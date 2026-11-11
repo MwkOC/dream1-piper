@@ -4,7 +4,7 @@ Plan inicial de adaptación, revisado el 2026-11-07. La implementación activa
 experimental vive en `experiments/piper`; el SDK se instala desde PyPI, sin una
 copia de su monorepo aquí.
 
-Actualización: se consolidó el driver activo y la [guía de setup Piper](SETUP_PIPER.md).
+Actualización: se consolidó el driver activo y la [guía de setup Piper](../experiments/piper/README.md).
 Incluye selección de cadena URDF, fuente ZED monocular, streaming limitado y
 pruebas offline. El driver moderno
 `xhuman/robots/piper/driver.py` ya trabaja en radianes; la conversión normalizada
@@ -31,8 +31,8 @@ La integración pública es mediante API. El repositorio encontrado contiene el 
 No existe `/home/mwkoc/GITHUB/xhuman` en este equipo. Se interpreta la referencia del usuario como el proyecto XHUMAN dentro de `nonhuman`. También existe `GITHUB/NoHuman`, pero es otro árbol y no se mezcla en esta propuesta.
 
 El checkout oficial fue el punto de partida y permanece en el historial Git.
-Ahora se mantiene solo la integración, con `dreamlabs==1.0.18` y
-`dreamlabs-client==1.0.9` instalados desde PyPI en `.venv`.
+Ahora se mantiene solo la integración, con `dreamlabs==1.0.37` y
+`dreamlabs-client==1.1.3` instalados desde PyPI en el entorno de experimentos.
 
 ## 3. Puntos de integración comprobados
 

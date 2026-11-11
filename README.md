@@ -8,6 +8,8 @@ la integración activa experimental para brazos AgileX Piper.
 - [`app/`](app/): aplicación FastAPI y contratos de validación.
 - [`experiments/`](experiments/): captura ROS 2/MCAP, driver activo Piper,
   streaming, IK y configuración experimental.
+- [`experiments/piper/`](experiments/piper/): setup de hardware, estado del
+  driver y comandos de la API Dream para Piper.
 - [`docs/`](docs/): documentación de instalación, estado y arquitectura.
 - [`.references/`](.references/): material externo; solo se versiona la
   propuesta de configuraciones.

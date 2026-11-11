@@ -1,2 +1,2 @@
-dreamlabs==1.0.18
-dreamlabs-client==1.0.9
+dreamlabs==1.0.37
+dreamlabs-client==1.1.3

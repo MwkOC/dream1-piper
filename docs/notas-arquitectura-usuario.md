@@ -2,7 +2,7 @@
 
 > Notas aportadas por el usuario, conservadas del archivo
 > `1_5149940738825390635.md`. Son una referencia de investigación; el setup actual
-> de este repositorio se documenta en [SETUP_PIPER.md](SETUP_PIPER.md).
+> de este repositorio se documenta en [experiments/piper/README.md](../experiments/piper/README.md).
 
 La arquitectura que te describieron:
 

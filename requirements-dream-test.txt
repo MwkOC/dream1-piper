@@ -1,4 +1,5 @@
-dreamlabs-client>=1.1.3,<4
+dreamlabs==1.0.37
+dreamlabs-client==1.1.3
 numpy>=1.26,<3
 scipy>=1.11
 PyYAML>=6

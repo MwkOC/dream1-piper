@@ -22,6 +22,10 @@ No Dream Labs source tree is included in this repository or added through
 
 ## Piper driver and configuration
 
+The Piper-specific documentation lives beside the implementation:
+[setup and overview](piper/README.md), [hardware setup](piper/HARDWARE_SETUP.md),
+[driver status](piper/DRIVER_STATUS.md), and [Dream API commands](piper/DREAM_API.md).
+
 `../configs/bipiper.yaml` is the single `bi_piper` configuration. It declares
 `can0`/`can1`, calibration, camera roles and limits. The Piper TCP/base frames
 are read from the repository URDF by the active config loader.
@@ -35,7 +39,9 @@ Instantiating these classes can enable motors and send commands; use them only
 on the robot host with supervision.
 
 The local robot ID is `bi_piper`. It is not a Dream Labs embodiment ID. The
-Dream probe keeps `other_embodiment` until a real remote embodiment is supplied.
+Dream probe uses `other_embodiment` with Dream Labs' official client-side IK.
+Set `DREAM_ARM_FILE` to the arm file produced and physically confirmed by
+`dreamcli tcp`; the probe does not invent TCP or gripper geometry.
 
 To inspect accessible Dream models without hardware:
 
@@ -51,12 +57,21 @@ To inspect one Dream action chunk without moving motors:
 dream-piper-models --infer --prompt 'pick up the soft object'
 ```
 
+Before execution, inspect the camera/state contract as a human:
+
+```bash
+python -m dream.check
+```
+
 `--execute` is an explicit hardware action. It validates the complete EEF
 chunk through IK before enabling either arm:
 
 ```bash
 dream-piper-models --infer --execute --prompt 'pick up the soft object'
 ```
+
+Añade `--log data/dream-run.jsonl` para registrar por separado observaciones,
+acciones del modelo y comandos enviados; no guarda los píxeles de cámara.
 
 ## Raw ROS capture
 

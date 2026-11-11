@@ -270,8 +270,8 @@ hardware = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dreamlabs", marker = "extra == 'dream'", specifier = "==1.0.18" },
-    { name = "dreamlabs-client", marker = "extra == 'api'", specifier = "==1.0.9" },
+    { name = "dreamlabs", marker = "extra == 'dream'", specifier = "==1.0.37" },
+    { name = "dreamlabs-client", marker = "extra == 'api'", specifier = "==1.1.3" },
     { name = "numpy", specifier = ">=2.2,<3" },
     { name = "opencv-python-headless", specifier = ">=4.10,<5" },
     { name = "piper-sdk", marker = "extra == 'hardware'", specifier = ">=0.2.0" },
@@ -283,7 +283,7 @@ provides-extras = ["dream", "api", "hardware", "dev"]
 
 [[package]]
 name = "dreamlabs"
-version = "1.0.18"
+version = "1.0.37"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "av" },
@@ -322,19 +322,19 @@ dependencies = [
     { name = "yourdfpy" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/8a/e084c5aa6009165d1d2ac1fd5ece2f1de0a594bdb7acb6425dc51f4bf6ca/dreamlabs-1.0.18-py3-none-any.whl", hash = "sha256:dea9bed75f102cce28505d5e763b475b9c1aa14e28c304da44bc7894b1950ca7", size = 17785691, upload-time = "2026-10-23T21:12:04.799Z" },
+    { url = "https://files.pythonhosted.org/packages/09/58/f7ec063cd2d3c6bf5c8c0a858e34a3df57107cb8e5f9c0463929fc5e0729/dreamlabs-1.0.37-py3-none-any.whl", hash = "sha256:851e380f1fb3ebed9a1228ad926bfa12f1934b0810ea9811b36ce1f18c835214", size = 17797520, upload-time = "2026-11-07T00:14:06.543Z" },
 ]
 
 [[package]]
 name = "dreamlabs-client"
-version = "1.0.9"
+version = "1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "websockets" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/02/1c5091027a1640177845fe86c245316478974f8c4398dd9b334ef7f505a3/dreamlabs_client-1.0.9-py3-none-any.whl", hash = "sha256:8751cc6a1e103a359460ddc81eb5e3be0ec55fc73faff298c8f442fd5c390b67", size = 458764, upload-time = "2026-10-23T21:11:47.006Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/dd/a22b42032b21162c2865ca5c550ff1b7105293ccdbe8189d26f389c27022/dreamlabs_client-1.1.3-py3-none-any.whl", hash = "sha256:c7db356fe899a00342a3bcf9a6c1655390799207b425f34314688d4d1d48ab80", size = 942157, upload-time = "2026-11-07T00:13:58.591Z" },
 ]
 
 [package.optional-dependencies]

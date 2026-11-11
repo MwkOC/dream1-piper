@@ -18,3 +18,6 @@ node_modules/
 !.references/
 !.references/Tareas-con-Piper-Referencias.md
 secrets/
+
+# Generated archive of the external Piper description package.
+assets/piper_description.zip

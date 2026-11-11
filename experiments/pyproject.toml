@@ -12,10 +12,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dream = [
-    "dreamlabs==1.0.18",
+    "dreamlabs==1.0.37",
 ]
 api = [
-    "dreamlabs-client==1.0.9",
+    "dreamlabs-client==1.1.3",
 ]
 hardware = [
     "piper_sdk>=0.2.0",
