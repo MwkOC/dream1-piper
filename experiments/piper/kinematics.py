@@ -90,9 +90,11 @@ class PiperKinematics:
         """Find a bounded joint target and reject unreachable EEF poses."""
         target_position = np.asarray(position, dtype=np.float64).reshape(3)
         target_rotation = self.rot6_to_matrix(rot6)
-        initial = np.clip(np.asarray(seed, dtype=np.float64).reshape(6), self.lower, self.upper)
+        initial = np.asarray(seed, dtype=np.float64).reshape(6)
         if not np.isfinite(target_position).all() or not np.isfinite(initial).all():
             raise ValueError("Dream EEF target and IK seed must be finite")
+        if np.any(initial < self.lower) or np.any(initial > self.upper):
+            raise ValueError("Measured/commanded Piper seed exceeds physical joint limits")
 
         def residual(joints: np.ndarray) -> np.ndarray:
             current = self.forward_matrix(joints)

@@ -48,6 +48,19 @@ class PiperFeedbackArm:
         self._closed = False
         self.arm.ConnectPort(piper_init=False)
 
+    def wait_ready(self, timeout_s: float = 2.0) -> None:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            try:
+                self.read()
+                return
+            except RuntimeError as exc:
+                if "feedback has not arrived" not in str(exc):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"{self.port}: no joint/gripper feedback within {timeout_s}s") from exc
+                time.sleep(0.02)
+
     def read(self) -> tuple[np.ndarray, float]:
         if self._closed:
             raise RuntimeError(f"{self.port}: Piper feedback connection is closed")
@@ -85,6 +98,7 @@ class PiperSdkArm:
         speed_percent: int = 80,
         enable_timeout_s: float = 10.0,
         gripper_effort: int = 1000,
+        feedback: PiperFeedbackArm | None = None,
     ) -> None:
         try:
             from piper_sdk import C_PiperInterface_V2
@@ -97,20 +111,23 @@ class PiperSdkArm:
             raise ValueError("startup_speed_percent must be in [1, 100]")
         self.speed_percent = int(speed_percent)
         self.gripper_effort = int(gripper_effort)
-        self.arm = C_PiperInterface_V2(port)
+        if feedback is not None and (feedback.port != port or feedback._closed):
+            raise ValueError("feedback connection must be open and match the control port")
+        self.arm = feedback.arm if feedback is not None else C_PiperInterface_V2(port)
         self._closed = False
-        self.arm.ConnectPort()
+        if feedback is None:
+            self.arm.ConnectPort()
+        else:
+            feedback._closed = True  # Transfer ownership without closing the shared SDK socket.
         try:
+            self._check_transmissions()
             self._wait_for_feedback()
             initial = self.read_joints_rad()
             get_status = getattr(self.arm, "GetArmStatus", None)
             if get_status is not None:
                 status = get_status().arm_status
                 if self._requires_reset(status):
-                    reset = getattr(self.arm, "ResetPiper", None)
-                    if reset is not None:
-                        reset()
-                        time.sleep(0.1)
+                    raise RuntimeError(f"{port}: arm status requires operator inspection; automatic reset disabled")
 
             # Piper retains its last native joint target across process
             # restarts. Preload measured feedback before selecting MOVE_J and
@@ -135,6 +152,28 @@ class PiperSdkArm:
         except BaseException:
             self.disconnect()
             raise
+
+    def _check_transmissions(self) -> None:
+        """Make SDK transmission failures visible to the control loop.
+
+        The SDK otherwise logs failed frames and lets the caller continue.
+        """
+        transport = getattr(self.arm, "_C_PiperInterface_V2__arm_can", None)
+        if transport is None:
+            return  # Test doubles need not implement the SDK transport.
+        original = transport.SendCanMessage
+        success = transport.CAN_STATUS.SEND_MESSAGE_SUCCESS
+        if getattr(transport, "_piper_checked_send", False):
+            return
+
+        def checked_send(*args: object, **kwargs: object) -> object:
+            result = original(*args, **kwargs)
+            if result != success:
+                raise RuntimeError(f"{self.port}: CAN transmit failed: {result}")
+            return result
+
+        transport.SendCanMessage = checked_send
+        transport._piper_checked_send = True
 
     def _wait_for_feedback(self, timeout_s: float = 1.5) -> None:
         deadline = time.monotonic() + timeout_s

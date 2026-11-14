@@ -1,0 +1,33 @@
+{
+  "urdf": "piper-description.urdf",
+  "base": "dummy_link",
+  "flange": "gripper_base",
+  "tcp": [
+    0.0,
+    0.0,
+    0.145
+  ],
+  "approach": [
+    0.087104,
+    0.0,
+    0.996199
+  ],
+  "jaw": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "rest": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "tcp_calibration": {
+    "status": "calibrated",
+    "at": "2026-11-13T22:58:18+00:00",
+    "digest": "24d2011e42612745"
+  }
+}

@@ -75,6 +75,28 @@ acciones del modelo y comandos enviados; no guarda los píxeles de cámara.
 
 ## Raw ROS capture
 
+### Python environments for Ubuntu 24.04 / Jazzy
+
+Keep Dream and these experiments on Python 3.13 in their existing `.venv`.
+ROS Jazzy binary packages use Ubuntu's system Python 3.12; do not install
+`rclpy` into the Dream environment or replace the system Python with Conda.
+The capture script calls the ROS CLI as a subprocess and does not import
+`rclpy`, so it does not require changing this project's Python constraint.
+
+After installing Ubuntu 24.04 and ROS Jazzy, open a separate ROS terminal
+from the repository root:
+
+```bash
+bash scripts/jazzy-shell.sh
+python3 --version
+python3 -c 'import rclpy; print(rclpy.__file__)'
+```
+
+The launcher removes inherited Python/Conda paths and sources Jazzy.
+It can also run a single command: `bash scripts/jazzy-shell.sh ros2 --help`.
+Use the existing `.venv` in a different terminal for Dream. The launcher
+does not change your global shell configuration or existing environments.
+
 ```bash
 python -m capture.record_episode \
   --config experiments/capture/topics.yaml \

@@ -4,7 +4,10 @@ Ejecuta los comandos desde la raíz del repositorio.
 
 ## 1. Conectar los brazos
 
-Conecta el adaptador CAN del brazo izquierdo como `can1` y el del derecho como `can0`. Esta asignación coincide con `robot.left_port` y `robot.right_port` en [`bipiper.yaml`](../../configs/bipiper.yaml).
+La asignación física confirmada de este montaje es izquierdo `can0` y derecho
+`can1`, según [`bipiper.yaml`](../../configs/bipiper.yaml). Sigue la guía actual
+[COMANDOS_BIPIPER.md](../../COMANDOS_BIPIPER.md); las recetas históricas de
+identificadores USB de abajo no deben aplicarse sin verificar los adaptadores.
 
 ## 2. Identificar los adaptadores CAN
 

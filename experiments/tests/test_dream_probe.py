@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from piper.dream_probe import RunLogger, _chunk, _policy_config
+from piper.dream_probe import RunLogger, _chunk, _commanded_payload, _policy_config
 
 
 def _action(rows: int = 48) -> dict[str, np.ndarray]:
@@ -10,11 +10,11 @@ def _action(rows: int = 48) -> dict[str, np.ndarray]:
     return {"q_l_chunk": values.copy(), "q_r_chunk": values.copy()}
 
 
-def test_official_ik_policy_config_is_strict_and_uses_eef_head() -> None:
+def test_custom_ik_policy_does_not_apply_sdk_ik_twice() -> None:
     config = _policy_config("dreamlabs/dream-1-beta", "/tmp/piper-arm.json")
     assert config["strict"] is True
     assert config["robot"] == "other_embodiment"
-    assert config["ik"] == {"arm": "/tmp/piper-arm.json", "head": "eef", "solve": "traj"}
+    assert "ik" not in config
     assert (config["obs_window"], config["obs_fps"], config["action_hz"]) == (9, 5, 30)
 
 
@@ -40,6 +40,15 @@ def test_chunk_rejects_non_finite_and_invalid_gripper_values() -> None:
     action["q_l_chunk"][0, 6] = 1.1
     with pytest.raises(ValueError, match="outside"):
         _chunk(action)
+
+
+def test_commanded_payload_uses_official_dream_chunk_keys() -> None:
+    left = np.zeros(7)
+    right = np.ones(7)
+    payload = _commanded_payload({"left": left, "right": right})
+    assert set(payload) == {"q_l_chunk", "q_r_chunk"}
+    np.testing.assert_array_equal(payload["q_l_chunk"], left)
+    np.testing.assert_array_equal(payload["q_r_chunk"], right)
 
 
 def test_run_logger_separates_execution_evidence(tmp_path) -> None:
