@@ -1,4 +1,4 @@
-"""Load a dataset-derived initial joint pose for Piper inference."""
+"""Shared slightly raised startup pose, with optional dataset YAML overrides."""
 
 from __future__ import annotations
 
@@ -13,9 +13,13 @@ import yaml
 from .constants import (
     PIPER_JOINT_LOWER_RAD,
     PIPER_JOINT_UPPER_RAD,
+    validate_joint_target,
 )
 
 SIDES = ("left", "right")
+# J1..J6 in degrees; identical targets in each arm's own joint frame.
+# The URDF predicts a TCP about 2.5 cm higher than the all-zero posture.
+INITIAL_JOINT_DEGREES = (0.0, 5.0, -10.0, 0.0, 10.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -38,12 +42,18 @@ def _sequence(value: Any, description: str) -> Sequence[Any]:
 
 
 def load_piper_initial_joint_pose(
-    path: Path,
+    path: Path | None = None,
     *,
     selection: str = "nearest_to_mean",
     required_sides: tuple[str, ...] = SIDES,
 ) -> PiperInitialJointPose:
     """Load and validate a named pose without relying on positional layout."""
+    unknown_sides = set(required_sides) - set(SIDES)
+    if unknown_sides:
+        raise ValueError(f"Unknown Piper sides requested: {sorted(unknown_sides)}")
+    if path is None:
+        target = validate_joint_target(np.deg2rad(INITIAL_JOINT_DEGREES))
+        return PiperInitialJointPose(joints={side: target.copy() for side in required_sides})
     source_path = Path(path).expanduser().resolve()
     try:
         document = yaml.safe_load(source_path.read_text(encoding="utf-8"))
@@ -73,10 +83,6 @@ def load_piper_initial_joint_pose(
     if values.shape != (len(names),) or not np.isfinite(values).all():
         raise ValueError(f"Initial pose contains invalid values: {source_path}")
     named = dict(zip(names, zip(units, values, strict=True), strict=True))
-
-    unknown_sides = set(required_sides) - set(SIDES)
-    if unknown_sides:
-        raise ValueError(f"Unknown Piper sides requested: {sorted(unknown_sides)}")
 
     joints: dict[str, np.ndarray] = {}
     for side in required_sides:

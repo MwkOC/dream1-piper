@@ -3,7 +3,7 @@
 cameras:
   left:
     type: opencv
-    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:1:1.0-video-index0
+    index_or_path: /dev/video0
     width: 640
     height: 480
     fps: 30
@@ -11,16 +11,13 @@ cameras:
 
   top:
     type: zedmini
-    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:3:1.0-video-index0
-    # UVC exposes both 672x376 eyes side by side. The MU driver returns the left eye.
-    width: 1344
-    height: 376
+    # SDK VGA: rectified left image, 672x376. Optionally select a camera
+    # with serial_number: 12345678 when multiple ZED cameras are connected.
     fps: 30
-    backend: V4L2
 
   right:
     type: opencv
-    index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:5:1.0-video-index0
+    index_or_path: /dev/video4
     width: 640
     height: 480
     fps: 30

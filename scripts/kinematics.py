@@ -74,6 +74,8 @@ class PiperKinematics:
     def rot6_to_matrix(rot6: np.ndarray) -> np.ndarray:
         """Decode Dream's 6D rotation representation as two matrix columns."""
         value = np.asarray(rot6, dtype=np.float64).reshape(6)
+        if not np.isfinite(value).all():
+            raise ValueError("Dream EEF rotation must be finite")
         first, second = value[:3].copy(), value[3:].copy()
         first_norm = np.linalg.norm(first)
         if first_norm < 1e-8:

@@ -91,8 +91,6 @@ class PiperInferenceStartConfig:
     tolerance_deg: float = 2.0
 
     def __post_init__(self) -> None:
-        if self.enabled and self.pose_file is None:
-            raise ValueError("inference_start.pose_file is required when enabled")
         motion_limits = (
             self.max_joint_speed_deg_s,
             self.timeout_s,
@@ -153,7 +151,7 @@ class Piper(Robot):
 
     def _load_initial_pose(self) -> PiperInitialJointPose | None:
         config = self.config.inference_start
-        if not config.enabled or config.pose_file is None:
+        if not config.enabled:
             return None
         return load_piper_initial_joint_pose(
             config.pose_file,
@@ -531,7 +529,7 @@ class BiPiper(Robot):
         start_config = config.inference_start
         self._initial_pose = (
             load_piper_initial_joint_pose(start_config.pose_file, selection=start_config.pose)
-            if start_config.enabled and start_config.pose_file is not None
+            if start_config.enabled
             else None
         )
 
@@ -689,7 +687,7 @@ class BiPiper(Robot):
         if self._initial_pose is None:
             raise RuntimeError("BiPiper inference initial pose is not enabled")
         config = self.config.inference_start
-        label = f"dataset initial pose ({config.pose})"
+        label = "inference initial pose"
         self.left.start_joint_move(
             self._initial_pose.joints["left"],
             gripper_opening=None,

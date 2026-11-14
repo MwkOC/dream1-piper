@@ -20,7 +20,12 @@ def default_piper_gripper_calibration_path() -> Path:
     override = os.environ.get(CALIBRATION_ENV_VAR)
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".mu-robotics" / "bipiper.yaml"
+    return Path(__file__).resolve().parents[1] / "outputs" / "calibration" / "bipiper-gripper-calibration.yaml"
+
+
+def _calibration_path(path: Path | None) -> Path:
+    source = Path(path or default_piper_gripper_calibration_path()).expanduser()
+    return source if source.is_absolute() else Path(__file__).resolve().parents[1] / source
 
 
 def _validated_range(side: str, value: Any) -> PiperGripperRange:
@@ -41,7 +46,7 @@ def load_piper_gripper_calibrations(
     path: Path | None = None,
 ) -> dict[str, PiperGripperRange]:
     """Load every complete per-side measured range from YAML."""
-    source = Path(path or default_piper_gripper_calibration_path()).expanduser()
+    source = _calibration_path(path)
     if not source.exists():
         return {}
     try:
@@ -58,7 +63,7 @@ def save_piper_gripper_calibrations(
     path: Path | None = None,
 ) -> Path:
     """Merge and persist measured ranges while preserving unselected sides."""
-    destination = Path(path or default_piper_gripper_calibration_path()).expanduser()
+    destination = _calibration_path(path)
     merged = load_piper_gripper_calibrations(destination)
     for side, gripper_range in calibrations.items():
         if side not in SIDES:

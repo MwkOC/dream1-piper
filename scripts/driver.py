@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .constants import PIPER_JOINT_LOWER_RAD, PIPER_JOINT_UPPER_RAD, validate_joint_target
+
 ARM_JOINT_COUNT = 6
 RAD_TO_MDEG = 1000.0 * 180.0 / np.pi
 MDEG_TO_RAD = 1.0 / RAD_TO_MDEG
@@ -97,6 +99,10 @@ class PiperSdkArm:
         try:
             self._wait_for_feedback()
             initial = self.read_joints_rad()
+            try:
+                validate_joint_target(initial)
+            except ValueError as error:
+                raise ValueError(f"{port}: postura medida al conectar: {error}") from error
             status = self.arm.GetArmStatus().arm_status
             if self._requires_reset(status):
                 self.arm.ResetPiper()
@@ -230,9 +236,7 @@ class PiperSdkArm:
         return result
 
     def send_joints_rad(self, joints: np.ndarray) -> None:
-        values = np.asarray(joints, dtype=np.float64).reshape(ARM_JOINT_COUNT)
-        if not np.isfinite(values).all():
-            raise ValueError("Piper joint command must be finite")
+        values = validate_joint_target(joints)
         command = np.rint(values * RAD_TO_MDEG).astype(np.int64)
         self.arm.JointCtrl(*(int(value) for value in command))
 
@@ -289,9 +293,9 @@ class PiperJointStreamer:
         self.raise_if_failed()
 
     def set_target(self, joints: np.ndarray, gripper_opening: float | None = None) -> None:
-        values = np.asarray(joints, dtype=np.float64).reshape(ARM_JOINT_COUNT)
-        if not np.isfinite(values).all():
-            raise ValueError("Piper target must be finite")
+        values = validate_joint_target(joints)
+        if gripper_opening is not None and not np.isfinite(gripper_opening):
+            raise ValueError("Piper gripper target must be finite")
         with self._lock:
             self._target = values.copy()
             if gripper_opening is not None:
@@ -341,6 +345,10 @@ class PiperJointStreamer:
                     reached = np.abs(step) >= np.abs(error)
                     self._command += np.where(reached, error, step)
                     self._velocity[reached] = 0.0
+                    # Deceleration after a target reversal can overshoot a limit.
+                    bounded = np.clip(self._command, PIPER_JOINT_LOWER_RAD, PIPER_JOINT_UPPER_RAD)
+                    self._velocity[bounded != self._command] = 0.0
+                    self._command = bounded
                     command = self._command.copy()
                 self.arm.send_joints_rad(command)
                 if gripper is not None:

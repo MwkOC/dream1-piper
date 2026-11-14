@@ -25,11 +25,12 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.driver import PiperGripperRange  # noqa: E402
 from scripts.gripper_calibration import (  # noqa: E402
+    default_piper_gripper_calibration_path,
     save_piper_gripper_calibrations,
 )
 
 
-DEFAULT_OUTPUT = Path("~/.dreamlabs/bipiper-gripper-calibration.yaml")
+DEFAULT_OUTPUT = default_piper_gripper_calibration_path()
 
 
 class PiperGripperReader:
