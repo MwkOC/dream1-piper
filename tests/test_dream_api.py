@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.constants import PIPER_JOINT_LOWER_RAD, PIPER_JOINT_UPPER_RAD
 from scripts.dreamlabs import main, make_observation, solve_chunk
 from scripts.driver import PiperGripperRange, PiperJointStreamer, PiperSdkArm
+from scripts.joint_calibration import PiperJointCalibration
 from scripts.kinematics import PiperKinematics
 
 
@@ -89,6 +90,7 @@ def test_driver_units_and_gripper():
             self.values = values
     arm = object.__new__(PiperSdkArm)
     arm.arm = Can()
+    arm.joint_calibration = PiperJointCalibration.identity()
     q = np.array([np.pi / 2, np.pi / 2, -np.pi / 2, 0, 0, 0])
     arm.send_joints_rad(q)
     assert arm.arm.values == (90000, 90000, -90000, 0, 0, 0)

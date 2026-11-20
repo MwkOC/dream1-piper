@@ -1,5 +1,16 @@
 # Dream-1 Piper
 
+> El flujo recomendado para validar la arquitectura actual es ahora el
+> experimento de dos procesos en
+> [`experiments/piper_station_worker`](experiments/piper_station_worker/). El
+> ejecutor directo `scripts/dreamlabs.py` se mantiene como referencia legada
+> hasta aceptar esa prueba; no mezcles ambos flujos contra el mismo hardware.
+
+Para el experimento Piper, crea `.env` con `cp .env.example .env`. El worker
+arranca en modo `action`; cambia `RSTACK_DREAM_MODE=observe` para inspeccionar
+sin enviar objetivos. El modo de acción requiere Validar → Armar → Iniciar desde
+la estación.
+
 Conexión de dos brazos AgileX Piper con Dream Labs mediante
 [`scripts/dreamlabs.py`](scripts/dreamlabs.py). El script captura las tres cámaras,
 lee el estado real, calcula FK con el URDF y convierte las respuestas EEF en
@@ -28,6 +39,10 @@ export DREAM_API_KEY='tu_clave_dreamlabs'
 El script no carga `.env` automáticamente. Los dispositivos y puertos se leen de
 `configs/cameras.yaml` y `configs/bipiper.yaml`. Antes de probar, prepara CAN,
 las cámaras y la calibración de ambas pinzas siguiendo las instrucciones de abajo.
+Los movimientos físicos también requieren una calibración articular confirmada;
+parte de [`configs/piper_joint_calibration.yaml.example`](configs/piper_joint_calibration.yaml.example).
+La guía de la futura aplicación local está en
+[`docs/APP_OPERATIONS.md`](docs/APP_OPERATIONS.md).
 
 ## Probar Dream Labs con un comando
 

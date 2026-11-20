@@ -1,0 +1,58 @@
+schema:
+  name: bipiper-dream1-v1
+  version: 1
+  control_hz: 20
+  action_names: &names [left_joint_1, left_joint_2, left_joint_3, left_joint_4, left_joint_5, left_joint_6, left_gripper, right_joint_1, right_joint_2, right_joint_3, right_joint_4, right_joint_5, right_joint_6, right_gripper]
+  state_names: *names
+  camera_names: [left, top, right]
+  action_space: radians
+  robot_type: piper
+  joint_limits:
+    - {minimum: -2.617993878, maximum: 2.617993878, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: 0.0, maximum: 3.141592654, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -2.967059728, maximum: 0.0, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -1.745329252, maximum: 1.745329252, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -1.221730476, maximum: 1.221730476, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -2.094395102, maximum: 2.094395102, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: 0.0, maximum: 1.0, max_speed: 0.5, max_acceleration: 2.0}
+    - {minimum: -2.617993878, maximum: 2.617993878, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: 0.0, maximum: 3.141592654, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -2.967059728, maximum: 0.0, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -1.745329252, maximum: 1.745329252, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -1.221730476, maximum: 1.221730476, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: -2.094395102, maximum: 2.094395102, max_speed: 0.5, max_acceleration: 1.5}
+    - {minimum: 0.0, maximum: 1.0, max_speed: 0.5, max_acceleration: 2.0}
+station:
+  home_action: [0, 0, 0, 0, 0.4363323, 0, 0, 0, 0, 0, 0, 0.4363323, 0, 0]
+  host: 127.0.0.1
+  port: 8765
+  watchdog_ms: 3500
+  first_action_timeout_ms: 960000
+  action_age_ms: 500
+  scheduled_action_age_ms: 6500
+  motion_mode: bounded
+  stream_rate_hz: 100
+  stream_max_joint_speed_deg_s: 30
+  stream_max_joint_acceleration_deg_s2: 120
+  camera_max_age_ms: 250
+  camera_max_skew_ms: 60
+  # Retry briefly for a coherent V4L frame set; the hard skew stays 60 ms.
+  camera_sync_wait_ms: 100
+robot:
+  driver: piper_bimanual
+  action_space: radians
+  options:
+    left_port: can0
+    right_port: can1
+    gripper_effort: 1000
+    enable_timeout_s: 10
+    startup_speed_percent: 5
+    motion_speed_percent: 20
+    disable_on_disconnect: false
+    # Source-compatible Piper SDK radians; a machine-local calibrated override
+    # may replace this only when feedback uses another sign/zero convention.
+    joint_calibration_path: configs/piper_joint_calibration.source-radians.yaml
+cameras:
+  - {name: left, device: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:1:1.0-video-index0, source_width: 640, source_height: 480, width: 640, height: 360, fps: 30, fourcc: MJPG, crop: center_16_9}
+  - {name: top, device: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:3:1.0-video-index0, source_width: 1344, source_height: 376, width: 640, height: 360, fps: 30, fourcc: YUYV, crop: left_half_center_16_9}
+  - {name: right, device: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:2:1.0-video-index0, source_width: 640, source_height: 480, width: 640, height: 360, fps: 30, fourcc: MJPG, crop: center_16_9}

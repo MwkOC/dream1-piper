@@ -1,0 +1,14 @@
+# Compatibility contract copied from Robotics_train_stack's piper_bimanual_dream1
+# profile: action_space=radians sends and receives Piper SDK radians directly.
+# Use a machine-local override only when its physical feedback demonstrably uses
+# a different sign or zero reference.
+schema_version: 1
+kind: piper_joint_calibration
+confirmed: true
+arms:
+  left:
+    signs: [1, 1, 1, 1, 1, 1]
+    offsets_rad: [0, 0, 0, 0, 0, 0]
+  right:
+    signs: [1, 1, 1, 1, 1, 1]
+    offsets_rad: [0, 0, 0, 0, 0, 0]

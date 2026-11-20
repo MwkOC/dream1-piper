@@ -1,0 +1,14 @@
+# Copy to a machine-local path only after completing the human Dream input check.
+station_url: ws://127.0.0.1:8765
+checkpoint: dreamlabs/dream-1-beta
+task: "Pick up the purple bunch of grapes and place it in the yellow basket."
+camera_roles: {left: wrist_l, top: overhead, right: wrist_r}
+timeout_ms: 15000
+obs_window: 9
+obs_fps: 5
+action_hz: 20
+execution_horizon: 30
+sync_above_ms: 700
+action_timeout_s: 3
+first_chunk_timeout_s: 900
+solver: dls

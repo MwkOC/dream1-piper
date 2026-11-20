@@ -1,0 +1,13 @@
+# Copy this file to outputs/calibration/bipiper-joint-calibration.yaml.
+# Do not set confirmed: true until a person has verified every sign and offset
+# with both arms physically supported and the emergency stop accessible.
+schema_version: 1
+kind: piper_joint_calibration
+confirmed: false
+arms:
+  left:
+    signs: [1, 1, 1, 1, 1, 1]
+    offsets_rad: [0, 0, 0, 0, 0, 0]
+  right:
+    signs: [1, 1, 1, 1, 1, 1]
+    offsets_rad: [0, 0, 0, 0, 0, 0]

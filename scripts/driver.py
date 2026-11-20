@@ -12,7 +12,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .constants import PIPER_JOINT_LOWER_RAD, PIPER_JOINT_UPPER_RAD, validate_joint_target
+from .constants import (
+    PIPER_JOINT_LOWER_RAD,
+    PIPER_JOINT_UPPER_RAD,
+    validate_joint_feedback,
+    validate_joint_target,
+)
+from .joint_calibration import PiperJointCalibration
 
 ARM_JOINT_COUNT = 6
 RAD_TO_MDEG = 1000.0 * 180.0 / np.pi
@@ -82,6 +88,7 @@ class PiperSdkArm:
         enable_timeout_s: float = 10.0,
         gripper_effort: int = 1000,
         gripper_range: PiperGripperRange | None = None,
+        joint_calibration: PiperJointCalibration | None = None,
     ) -> None:
         try:
             from piper_sdk import C_PiperInterface_V2
@@ -94,19 +101,26 @@ class PiperSdkArm:
             raise ValueError("startup_speed_percent must be in [1, 100]")
         self.speed_percent = int(speed_percent)
         self.gripper_effort = int(gripper_effort)
+        self.joint_calibration = joint_calibration
         self.arm = C_PiperInterface_V2(port)
         self.arm.ConnectPort()
         try:
             self._wait_for_feedback()
-            initial = self.read_joints_rad()
-            try:
-                validate_joint_target(initial)
-            except ValueError as error:
-                raise ValueError(f"{port}: postura medida al conectar: {error}") from error
             status = self.arm.GetArmStatus().arm_status
             if self._requires_reset(status):
-                self.arm.ResetPiper()
-                time.sleep(0.1)
+                raise RuntimeError(
+                    f"{port}: controller needs recovery; automatic ResetPiper is disabled "
+                    "because it releases motor torque. Support the arm and recover explicitly."
+                )
+            if self.joint_calibration is None:
+                raise RuntimeError(
+                    f"{port}: joint calibration is required before enabling motors; "
+                    "raw Piper feedback is diagnostic only"
+                )
+            try:
+                initial = self.read_joints_rad()
+            except ValueError as error:
+                raise ValueError(f"{port}: postura medida al conectar: {error}") from error
 
             # Piper retains its last native joint target across process
             # restarts. Preload measured feedback before selecting MOVE_J and
@@ -169,7 +183,7 @@ class PiperSdkArm:
 
     def read_joints_rad(self) -> np.ndarray:
         state = self.arm.GetArmJointMsgs().joint_state
-        return (
+        raw = (
             np.asarray(
                 [
                     state.joint_1,
@@ -183,6 +197,12 @@ class PiperSdkArm:
             )
             * MDEG_TO_RAD
         )
+        calibration = self.joint_calibration
+        if calibration is None:
+            raise RuntimeError(
+                f"{self.port}: raw Piper feedback has no confirmed joint calibration"
+            )
+        return calibration.normalize_feedback(validate_joint_feedback(raw))
 
     def read_gripper_opening(self) -> float | None:
         feedback = self.arm.GetArmGripperMsgs()
@@ -237,7 +257,12 @@ class PiperSdkArm:
 
     def send_joints_rad(self, joints: np.ndarray) -> None:
         values = validate_joint_target(joints)
-        command = np.rint(values * RAD_TO_MDEG).astype(np.int64)
+        calibration = getattr(self, "joint_calibration", None)
+        if calibration is None:
+            raise RuntimeError(
+                f"{getattr(self, 'port', 'Piper')}: joint calibration is required before sending targets"
+            )
+        command = np.rint(calibration.sdk_target(values) * RAD_TO_MDEG).astype(np.int64)
         self.arm.JointCtrl(*(int(value) for value in command))
 
     def send_gripper_opening(self, opening: float) -> None:

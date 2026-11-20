@@ -50,7 +50,7 @@ def harness(monkeypatch, *, fail_row=None):
             events['solved'].append(xyz[0])
             if fail_row is not None and xyz[0] >= fail_row:
                 raise ValueError('unreachable target')
-            return np.full(6, xyz[0]), 0, 0
+            return np.array([xyz[0], 1.0, -1.0, 0.0, 0.0, 0.0]), 0, 0
 
     robot = SimpleNamespace(
         send_action=lambda action: events['sent'].append((clock[0], action)),
@@ -102,7 +102,7 @@ def test_camera_read_does_not_block_action_ticks():
 
     class Solver:
         def solve(self, *args):
-            return np.zeros(6), 0, 0
+            return np.array([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]), 0, 0
 
     class Client:
         def get_action(self):

@@ -3,8 +3,8 @@ robot:
   type: bi_piper
   id: bi_piper
   urdf: ../assets/piper/piper.urdf
-  left_port: can0
-  right_port: can1
+  left_port: can1
+  right_port: can0
   # Machine-local physical limits. Gripper actions exposed to policies are [0, 1].
   gripper_calibration_path: outputs/calibration/bipiper-gripper-calibration.yaml
   gripper_action_tolerance: 0.1

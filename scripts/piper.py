@@ -48,6 +48,7 @@ except ImportError:
         return {}
 from .driver import ARM_JOINT_COUNT, PiperJointStreamer, PiperSdkArm
 from .gripper_calibration import load_piper_gripper_calibrations
+from .joint_calibration import load_piper_joint_calibrations
 from .initial_pose import (
     PiperInitialJointPose,
     load_piper_initial_joint_pose,
@@ -118,6 +119,7 @@ class PiperConfig(RobotConfig):
     gripper_effort: int = 1000
     gripper_action_tolerance: float = 0.1
     gripper_calibration_path: Path | None = None
+    joint_calibration_path: Path | None = None
     inference_start: PiperInferenceStartConfig = field(default_factory=PiperInferenceStartConfig)
 
     def __post_init__(self) -> None:
@@ -183,6 +185,9 @@ class Piper(Robot):
         gripper_range = load_piper_gripper_calibrations(self.config.gripper_calibration_path).get(
             self.config.side
         )
+        joint_calibration = load_piper_joint_calibrations(
+            self.config.joint_calibration_path
+        )[self.config.side]
         arm = PiperSdkArm(
             self.config.port,
             startup_speed_percent=self.config.startup_speed_percent,
@@ -190,6 +195,7 @@ class Piper(Robot):
             enable_timeout_s=self.config.enable_timeout_s,
             gripper_effort=self.config.gripper_effort,
             gripper_range=gripper_range,
+            joint_calibration=joint_calibration,
         )
         streamer = PiperJointStreamer(
             arm,
@@ -488,6 +494,7 @@ class BiPiperConfig(RobotConfig):
     gripper_effort: int = 1000
     gripper_action_tolerance: float = 0.1
     gripper_calibration_path: Path | None = None
+    joint_calibration_path: Path | None = None
     inference_start: PiperInferenceStartConfig = field(default_factory=PiperInferenceStartConfig)
 
     def __post_init__(self) -> None:
@@ -522,6 +529,7 @@ class BiPiper(Robot):
             "gripper_effort": config.gripper_effort,
             "gripper_action_tolerance": config.gripper_action_tolerance,
             "gripper_calibration_path": config.gripper_calibration_path,
+            "joint_calibration_path": config.joint_calibration_path,
         }
         self.left = Piper(PiperConfig(port=config.left_port, side="left", **arm_kwargs))
         self.right = Piper(PiperConfig(port=config.right_port, side="right", **arm_kwargs))
