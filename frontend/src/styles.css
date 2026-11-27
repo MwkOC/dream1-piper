@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+:root.dark { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 360px; min-height: 100vh; background: #f4f4f5; }
+.dark body { background: #09090b; }
+button, input, textarea, select { font: inherit; }
+input, textarea { width: 100%; border-radius: .5rem; border: 1px solid #d4d4d8; background: transparent; padding: .625rem .75rem; }
+.dark input, .dark textarea { border-color: #3f3f46; }
+.error { color: #dc2626; }
+.state-running { color: #16a34a; }
+.state-fault { color: #dc2626; }
+.state-ready { color: #2563eb; }

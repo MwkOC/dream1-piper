@@ -6,6 +6,21 @@
 > ejecutor directo `scripts/dreamlabs.py` se mantiene como referencia legada
 > hasta aceptar esa prueba; no mezcles ambos flujos contra el mismo hardware.
 
+## Aplicación Piper + Dream-1
+
+El scaffold de aplicación vive en `backend/`, `frontend/`, `ros2_ws/` y
+`compose.yaml`. La app usa FastAPI/OpenAPI con Scalar, UI React + TypeScript +
+Tailwind, un worker Dream separado y PostgreSQL para persistir operaciones,
+invocaciones, acciones y métricas. Configura secretos y overrides en `.env` a
+partir de `.env.example`; el perfil físico, límites y cámaras permanecen en
+`configs/app_robot.yaml`.
+
+El despliegue y la secuencia completa para instalar ROS 2 Jazzy, levantar el
+driver Piper, iniciar Compose, entrar por HTTPS y operar Validate → Arm → Start
+están en [`docs/APP_OPERATIONS.md`](docs/APP_OPERATIONS.md). No ejecutes al mismo
+tiempo la estación legada `piper_sdk` y el driver ROS 2 sobre las mismas
+interfaces CAN.
+
 Para el experimento Piper, crea `.env` con `cp .env.example .env`. El worker
 arranca en modo `action`; cambia `RSTACK_DREAM_MODE=observe` para inspeccionar
 sin enviar objetivos. El modo de acción requiere Validar → Armar → Iniciar desde

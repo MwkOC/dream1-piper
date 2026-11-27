@@ -1,0 +1,17 @@
+services:
+  station:
+    environment:
+      RSTACK_ENVIRONMENT: production
+      RSTACK_UI_HOST: ${RSTACK_UI_HOST:-0.0.0.0}
+      RSTACK_UI_TLS_CERT: /run/tls/tls-cert.pem
+      RSTACK_UI_TLS_KEY: /run/tls/tls-key.pem
+    volumes:
+      - "${TLS_CERT_HOST:?Set TLS_CERT_HOST in .env}:/run/tls/tls-cert.pem:ro"
+      - "${TLS_KEY_HOST:?Set TLS_KEY_HOST in .env}:/run/tls/tls-key.pem:ro"
+
+  worker:
+    environment:
+      RSTACK_DREAM_STATION_URL: ${RSTACK_DREAM_STATION_URL:-wss://127.0.0.1:8443/api/v1/worker}
+      RSTACK_UI_CA_CERT: /run/tls/lan-ca.pem
+    volumes:
+      - "${TLS_CA_HOST:?Set TLS_CA_HOST in .env}:/run/tls/lan-ca.pem:ro"

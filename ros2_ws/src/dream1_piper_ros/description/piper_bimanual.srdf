@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<robot name="dual_piper">
+  <group name="left_arm"><chain base_link="left_base_link" tip_link="left_tcp"/></group>
+  <group name="right_arm"><chain base_link="right_base_link" tip_link="right_tcp"/></group>
+  <group name="bimanual"><group name="left_arm"/><group name="right_arm"/></group>
+  <disable_collisions link1="world" link2="left_dummy_link" reason="Adjacent"/>
+  <disable_collisions link1="left_dummy_link" link2="left_base_link" reason="Adjacent"/>
+  <disable_collisions link1="left_base_link" link2="left_link1" reason="Adjacent"/>
+  <disable_collisions link1="left_link1" link2="left_link2" reason="Adjacent"/>
+  <disable_collisions link1="left_link2" link2="left_link3" reason="Adjacent"/>
+  <disable_collisions link1="left_link3" link2="left_link4" reason="Adjacent"/>
+  <disable_collisions link1="left_link4" link2="left_link5" reason="Adjacent"/>
+  <disable_collisions link1="left_link5" link2="left_link6" reason="Adjacent"/>
+  <disable_collisions link1="left_link6" link2="left_gripper_base" reason="Adjacent"/>
+  <disable_collisions link1="left_gripper_base" link2="left_link7" reason="Adjacent"/>
+  <disable_collisions link1="left_link7" link2="left_link8" reason="Adjacent"/>
+  <disable_collisions link1="left_link6" link2="left_tcp" reason="Adjacent"/>
+  <disable_collisions link1="world" link2="right_dummy_link" reason="Adjacent"/>
+  <disable_collisions link1="right_dummy_link" link2="right_base_link" reason="Adjacent"/>
+  <disable_collisions link1="right_base_link" link2="right_link1" reason="Adjacent"/>
+  <disable_collisions link1="right_link1" link2="right_link2" reason="Adjacent"/>
+  <disable_collisions link1="right_link2" link2="right_link3" reason="Adjacent"/>
+  <disable_collisions link1="right_link3" link2="right_link4" reason="Adjacent"/>
+  <disable_collisions link1="right_link4" link2="right_link5" reason="Adjacent"/>
+  <disable_collisions link1="right_link5" link2="right_link6" reason="Adjacent"/>
+  <disable_collisions link1="right_link6" link2="right_gripper_base" reason="Adjacent"/>
+  <disable_collisions link1="right_gripper_base" link2="right_link7" reason="Adjacent"/>
+  <disable_collisions link1="right_link7" link2="right_link8" reason="Adjacent"/>
+  <disable_collisions link1="right_link6" link2="right_tcp" reason="Adjacent"/>
+</robot>

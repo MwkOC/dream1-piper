@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 .venv-calibration/
 uv.lock
+!backend/uv.lock
 .env
 .env.*
 !.env.example
@@ -15,6 +16,10 @@ credentials.*
 outputs/
 experiments/data/
 node_modules/
+log/
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
 
 # Referencias externas: conservar únicamente la propuesta de configuraciones.
 .references/*

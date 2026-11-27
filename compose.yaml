@@ -1,0 +1,86 @@
+name: dream1-piper
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18.7-bookworm}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  station:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      RSTACK_ENVIRONMENT: ${RSTACK_ENVIRONMENT:-development}
+      RSTACK_UI_HOST: ${RSTACK_UI_HOST:-127.0.0.1}
+      RSTACK_UI_PORT: ${RSTACK_UI_PORT:-8443}
+      RSTACK_ROBOT_CONFIG: /app/configs/app_robot.yaml
+      RSTACK_DREAM_CONFIG: /app/experiments/piper_station_worker/config/dream.yaml
+      RSTACK_FRONTEND_DIST: /app/frontend/dist
+      RSTACK_ROS_BRIDGE_URL: ${RSTACK_ROS_BRIDGE_URL:-ws://127.0.0.1:8766}
+      RSTACK_CAMERA_LEFT_DEVICE: ${CAMERA_LEFT_CONTAINER:-/dev/video-left}
+      RSTACK_CAMERA_TOP_DEVICE: ${CAMERA_TOP_CONTAINER:-/dev/video-top}
+      RSTACK_CAMERA_RIGHT_DEVICE: ${CAMERA_RIGHT_CONTAINER:-/dev/video-right}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env, using 127.0.0.1 as host}
+      RSTACK_UI_TLS_CERT: ${RSTACK_UI_TLS_CERT:-}
+      RSTACK_UI_TLS_KEY: ${RSTACK_UI_TLS_KEY:-}
+    network_mode: host
+    devices:
+      - source: ${CAMERA_LEFT_HOST:?Set CAMERA_LEFT_HOST in .env}
+        target: ${CAMERA_LEFT_CONTAINER:-/dev/video-left}
+        permissions: rwm
+      - source: ${CAMERA_TOP_HOST:?Set CAMERA_TOP_HOST in .env}
+        target: ${CAMERA_TOP_CONTAINER:-/dev/video-top}
+        permissions: rwm
+      - source: ${CAMERA_RIGHT_HOST:?Set CAMERA_RIGHT_HOST in .env}
+        target: ${CAMERA_RIGHT_CONTAINER:-/dev/video-right}
+        permissions: rwm
+    group_add:
+      - "${VIDEO_GID:-44}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "scheme=http; if [ -n \"$${RSTACK_UI_TLS_CERT:-}\" ]; then scheme=https; fi; curl --fail --silent --insecure \"$${scheme}://127.0.0.1:$${RSTACK_UI_PORT}/healthz\" || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    restart: unless-stopped
+    init: true
+    command: ["dream1-piper-worker"]
+    env_file: .env
+    network_mode: host
+    environment:
+      RSTACK_DREAM_STATION_URL: ${RSTACK_DREAM_STATION_URL:-ws://127.0.0.1:8443/api/v1/worker}
+      RSTACK_UI_CA_CERT: ${RSTACK_UI_CA_CERT:-}
+      RSTACK_ROBOT_CONFIG: /app/configs/app_robot.yaml
+      RSTACK_DREAM_CONFIG: /app/experiments/piper_station_worker/config/dream.yaml
+      RSTACK_DREAM_MODE: ${RSTACK_DREAM_MODE:-action}
+    depends_on:
+      station:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

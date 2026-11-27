@@ -1,0 +1,13 @@
+{
+  "name": "dream1-piper-openapi-codegen",
+  "private": true,
+  "packageManager": "bun@1.4.5",
+  "type": "module",
+  "scripts": {
+    "generate": "openapi-typescript ${OPENAPI_URL:-http://127.0.0.1:8443/openapi.json} -o ../../frontend/src/lib/api/schema.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
