@@ -59,6 +59,7 @@ class MetricsService:
     def snapshot(self):
         by_source = {"dream": 0, "teleop": 0, "home": 0}
         stages = {}
+        tracking = {"left": [], "right": []}
         for sample in self.samples:
             source = sample.get("control_source")
             if source in by_source:
@@ -67,12 +68,41 @@ class MetricsService:
             stage = sample.get("stage")
             if stage and isinstance(duration, (int, float)):
                 stages.setdefault(f"{source or 'system'}.{stage}", []).append(float(duration))
+            if stage == "tcp_tracking_error" and sample.get("result") == "measured":
+                arm = sample.get("arm")
+                if arm in tracking and isinstance(sample.get("position_error_mm"), (int, float)):
+                    tracking[arm].append(sample)
         return {
             "window_ms": None,
             "sample_count": len(self.samples),
             "by_source": by_source,
             "stages": {name: self._summary(values) for name, values in stages.items()},
+            "tcp_tracking": {
+                arm: self._tracking_summary(values) for arm, values in tracking.items()
+            },
             "dropped": self.dropped,
+        }
+
+    @staticmethod
+    def _tracking_summary(samples):
+        values = [float(sample["position_error_mm"]) for sample in samples]
+        ordered = sorted(values)
+        median = (
+            (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) / 2
+            if ordered
+            else None
+        )
+        p95 = ordered[max(0, ceil(len(ordered) * 0.95) - 1)] if ordered else None
+        return {
+            "sample_count": len(values),
+            "mean_mm": sum(values) / len(values) if values else None,
+            "median_mm": median,
+            "p95_mm": p95,
+            "last_mm": values[-1] if values else None,
+            "last_orientation_error_deg": (
+                samples[-1].get("orientation_error_deg") if samples else None
+            ),
+            "last_target_age_ms": samples[-1].get("target_age_ms") if samples else None,
         }
 
     @staticmethod

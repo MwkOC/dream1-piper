@@ -1,11 +1,29 @@
 import os
 from pathlib import Path
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+
+
+def _tcp_offset():
+    configured = Path(os.getenv("RSTACK_ROBOT_CONFIG", "configs/app_robot.yaml")).expanduser()
+    candidates = [configured] if configured.is_absolute() else [
+        Path.cwd() / configured,
+        Path.cwd().parent / configured,
+        Path(__file__).resolve().parents[6] / configured,
+    ]
+    source = next((path.resolve() for path in candidates if path.is_file()), None)
+    if source is None:
+        raise RuntimeError(f"robot profile not found for ROS TCP calibration: {configured}")
+    profile = yaml.safe_load(source.read_text(encoding="utf-8"))
+    offset = profile["robot"]["options"]["tcp_offset"]
+    if len(offset) != 6:
+        raise ValueError("robot.options.tcp_offset must contain xyz/rpy values")
+    return [float(value) for value in offset]
 
 
 def generate_launch_description():
@@ -14,6 +32,7 @@ def generate_launch_description():
     description = Path(package) / "description"
     robot_description = (description / "piper.urdf").read_text(encoding="utf-8")
     robot_semantic = (description / "piper_bimanual.srdf").read_text(encoding="utf-8")
+    tcp_offset = str(_tcp_offset())
     driver_launch = Path(get_package_share_directory("agx_arm_ctrl")) / "launch/start_single_agx_arm_moveit.launch.py"
     actions = []
     for side, env_key, tcp in (("left", "RSTACK_CAN_LEFT", "left_tcp"), ("right", "RSTACK_CAN_RIGHT", "right_tcp")):
@@ -29,6 +48,7 @@ def generate_launch_description():
                 "control_gate_service": f"/{side}/control_enable",
                 "use_rviz": "false",
                 "speed_percent": os.getenv("RSTACK_ROBOT_SPEED_PERCENT", "20"),
+                "tcp_offset": tcp_offset,
             }.items(),
         ))
         actions.append(Node(
@@ -52,6 +72,10 @@ def generate_launch_description():
         parameters=[{
             "home_duration_s": float(os.getenv("RSTACK_HOME_DURATION_S", "3.0")),
             "home_tolerance_rad": float(os.getenv("RSTACK_HOME_TOLERANCE_RAD", "0.08")),
+            "pose_metrics_hz": float(os.getenv("RSTACK_POSE_METRICS_HZ", "2")),
+            "pose_metrics_max_target_age_ms": float(
+                os.getenv("RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS", "250")
+            ),
         }],
         output="screen",
     ))

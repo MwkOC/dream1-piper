@@ -6,7 +6,7 @@ export function StatusCard({ label, value, accent = "" }: { label: string; value
 }
 
 export function MetricsPanel() {
-  const [metrics, setMetrics] = useState<{ sample_count: number; by_source: Record<string, number>; dropped: number; stages?: Record<string, { last_ms?: number | null; p95_ms?: number | null }> } | null>(null);
+  const [metrics, setMetrics] = useState<{ sample_count: number; by_source: Record<string, number>; dropped: number; stages?: Record<string, { last_ms?: number | null; p95_ms?: number | null }>; tcp_tracking?: Record<string, { sample_count: number; p95_mm?: number | null; last_mm?: number | null; last_orientation_error_deg?: number | null }> } | null>(null);
   useEffect(() => {
     const update = () => void api.metrics().then(setMetrics).catch(() => undefined);
     update();
@@ -17,6 +17,14 @@ export function MetricsPanel() {
     <div className="mb-3"><h2 className="font-semibold">Métricas</h2><p className="text-xs text-zinc-500">Ventana activa · fuente y latencia</p></div>
     <div className="grid grid-cols-2 gap-2 text-sm"><Metric label="Dream" value={metrics?.by_source.dream ?? 0} /><Metric label="Teleop" value={metrics?.by_source.teleop ?? 0} /><Metric label="Muestras" value={metrics?.sample_count ?? 0} /><Metric label="Eventos perdidos" value={metrics?.dropped ?? 0} /></div>
     <div className="mt-3 space-y-1 text-xs text-zinc-500">{Object.entries(metrics?.stages ?? {}).map(([stage, values]) => <p key={stage}>{stage}: último {values.last_ms?.toFixed(0) ?? "—"} ms · p95 {values.p95_ms?.toFixed(0) ?? "—"} ms</p>)}</div>
+    <div className="mt-4 grid grid-cols-2 gap-2 text-xs">{["left", "right"].map((arm) => {
+      const value = metrics?.tcp_tracking?.[arm];
+      return <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800" key={arm}>
+        <p className="font-medium">Error TCP · {arm}</p>
+        <p className="mt-1 text-zinc-500">Actual {value?.last_mm?.toFixed(1) ?? "—"} mm · p95 {value?.p95_mm?.toFixed(1) ?? "—"} mm</p>
+        <p className="text-zinc-500">Orientación {value?.last_orientation_error_deg?.toFixed(1) ?? "—"}° · {value?.sample_count ?? 0} muestras</p>
+      </div>;
+    })}</div>
   </section>;
 }
 

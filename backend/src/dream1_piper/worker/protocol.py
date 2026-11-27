@@ -58,6 +58,7 @@ def action_message(action: PolicyAction) -> dict[str, Any]:
         "scheduled": action.scheduled,
         "control_generation": action.control_generation,
         "invocation_id": action.invocation_id,
+        "tcp_targets": action.tcp_targets,
     }
 
 
@@ -74,4 +75,5 @@ def parse_action(value: dict[str, Any]) -> PolicyAction:
         scheduled=bool(value.get("scheduled", False)),
         control_generation=int(value.get("control_generation", 0)),
         invocation_id=value.get("invocation_id"),
+        tcp_targets=value.get("tcp_targets"),
     )

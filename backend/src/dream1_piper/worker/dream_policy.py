@@ -18,6 +18,31 @@ from .kinematics import DampedLeastSquares, DlsSettings, UrdfArm
 from .protocol import Observation
 
 
+def _quaternion_xyzw(rotation: np.ndarray) -> list[float]:
+    matrix = np.asarray(rotation, dtype=float)
+    trace = float(np.trace(matrix))
+    if trace > 0:
+        scale = 2.0 * np.sqrt(trace + 1.0)
+        values = [
+            (matrix[2, 1] - matrix[1, 2]) / scale,
+            (matrix[0, 2] - matrix[2, 0]) / scale,
+            (matrix[1, 0] - matrix[0, 1]) / scale,
+            scale / 4.0,
+        ]
+    else:
+        axis = int(np.argmax(np.diag(matrix)))
+        next_axis, last_axis = (axis + 1) % 3, (axis + 2) % 3
+        scale = 2.0 * np.sqrt(
+            1.0 + matrix[axis, axis] - matrix[next_axis, next_axis] - matrix[last_axis, last_axis]
+        )
+        xyz = [0.0, 0.0, 0.0]
+        xyz[axis] = scale / 4.0
+        xyz[next_axis] = (matrix[next_axis, axis] + matrix[axis, next_axis]) / scale
+        xyz[last_axis] = (matrix[last_axis, axis] + matrix[axis, last_axis]) / scale
+        values = [*xyz, (matrix[last_axis, next_axis] - matrix[next_axis, last_axis]) / scale]
+    return (np.asarray(values) / np.linalg.norm(values)).tolist()
+
+
 def _dotenv() -> None:
     from dotenv import load_dotenv
 
@@ -107,6 +132,17 @@ class DreamDls:
             payload[f"state.{side}_arm"] = np.zeros(6)
             payload[f"state.{side}_gripper"] = state[start + 6 : start + 7]
         return payload
+
+    def tcp_targets(self, values: tuple[float, ...]) -> dict[str, dict[str, Any]]:
+        targets = {}
+        for side, start in (("left", 0), ("right", 7)):
+            pose = self.arm.forward(np.asarray(values[start : start + 6], dtype=float))
+            targets[side] = {
+                "frame_id": f"{side}_base_link",
+                "position": pose[:3, 3].tolist(),
+                "orientation": _quaternion_xyzw(pose[:3, :3]),
+            }
+        return targets
 
     @staticmethod
     def _target(position: np.ndarray, rot6: np.ndarray) -> np.ndarray:
@@ -265,6 +301,11 @@ class DreamPiperPolicy:
 
     def refill_due(self, executed: int, remaining: int) -> bool:
         return bool(self.client.refill_due(executed, remaining))
+
+    def tcp_targets(self, values: tuple[float, ...]) -> dict[str, dict[str, Any]]:
+        if self._local_ik is None:
+            return {}
+        return self._local_ik.tcp_targets(values)
 
     def reset_episode(self) -> None:
         with self._lock:

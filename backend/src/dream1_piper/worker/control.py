@@ -99,6 +99,7 @@ class PolicyAction:
     scheduled: bool = False
     control_generation: int = 0
     invocation_id: str | None = None
+    tcp_targets: dict[str, dict[str, object]] | None = None
 
 
 class MotionSupervisor:

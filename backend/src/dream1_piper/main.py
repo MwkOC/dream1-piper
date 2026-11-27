@@ -35,6 +35,7 @@ async def _probe_ros(app):
         was_ready = app.state.ros_ready
         try:
             result = await app.state.ros_gateway.status()
+            _consume_tracking_samples(app, result)
             app.state.ros_ready = bool(result.get("ready"))
             if app.state.ros_ready:
                 if app.state.station.state.value == "DISCONNECTED":
@@ -52,6 +53,13 @@ async def _probe_ros(app):
             if was_ready:
                 await _stop_after_ros_loss(app)
         await asyncio.sleep(1.0)
+
+
+def _consume_tracking_samples(app, result):
+    for sample in result.get("tracking_samples", []):
+        if sample.get("result") == "measured":
+            sample["operation_id"] = sample.get("operation_id") or app.state.station.operation_id
+        _event_sink(app, "metric", sample)
 
 
 async def _stop_after_ros_loss(app):

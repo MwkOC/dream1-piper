@@ -1,8 +1,10 @@
 import asyncio
 import json
+import math
 import os
 import threading
 import time
+from collections import deque
 
 import rclpy
 from geometry_msgs.msg import TwistStamped
@@ -10,6 +12,7 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_srvs.srv import SetBool
+from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory
 from websockets.asyncio.server import serve
 
@@ -17,15 +20,39 @@ from websockets.asyncio.server import serve
 SIDES = ("left", "right")
 
 
+def _position_error_mm(target, measured):
+    return sum((float(a) - float(b)) ** 2 for a, b in zip(target, measured, strict=True)) ** 0.5 * 1000
+
+
+def _orientation_error_deg(target, measured):
+    left = [float(value) for value in target]
+    right = [float(value) for value in measured]
+    left_norm = sum(value * value for value in left) ** 0.5
+    right_norm = sum(value * value for value in right) ** 0.5
+    if left_norm == 0 or right_norm == 0:
+        raise ValueError("feedback orientation quaternion must be non-zero")
+    dot = abs(sum(a * b for a, b in zip(left, right, strict=True)) / (left_norm * right_norm))
+    return 2 * math.acos(min(1.0, dot)) * 180 / math.pi
+
+
 class StationBridge(Node):
     def __init__(self):
         super().__init__("dream1_piper_station_bridge")
         self.declare_parameter("home_duration_s", 3.0)
         self.declare_parameter("home_tolerance_rad", 0.08)
+        self.declare_parameter("pose_metrics_hz", float(os.getenv("RSTACK_POSE_METRICS_HZ", "2")))
+        self.declare_parameter("pose_metrics_max_target_age_ms", float(os.getenv("RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS", "250")))
         self.home_duration_s = float(self.get_parameter("home_duration_s").value)
         self.home_tolerance_rad = float(self.get_parameter("home_tolerance_rad").value)
+        self.pose_metrics_hz = float(self.get_parameter("pose_metrics_hz").value)
+        self.pose_metrics_max_target_age_s = float(self.get_parameter("pose_metrics_max_target_age_ms").value) / 1000
+        if self.pose_metrics_hz <= 0 or self.pose_metrics_max_target_age_s <= 0:
+            raise ValueError("pose metric rate and target age must be positive")
         self.lock = threading.RLock()
-        self.arms = {side: {"stamp": 0.0, "joints": [], "gripper": 0.0, "tcp": None} for side in SIDES}
+        self.arms = {side: {"stamp": 0.0, "joints": [], "gripper": 0.0, "tcp": None, "tcp_stamp": 0.0} for side in SIDES}
+        self.tracking_targets = {side: None for side in SIDES}
+        self.last_pose_metric_at = {side: 0.0 for side in SIDES}
+        self.tracking_samples = deque(maxlen=256)
         self.source = None
         self.selected_arm = None
         self.generation = 0
@@ -38,6 +65,7 @@ class StationBridge(Node):
         for side in SIDES:
             self._create_arm_io(side)
         self.joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
+        self.tracking_pub = self.create_publisher(String, "/dream1/metrics/tcp_tracking", 10)
         self.create_timer(0.01, self._publish_fused_joint_state)
 
     def _create_arm_io(self, side):
@@ -58,11 +86,52 @@ class StationBridge(Node):
 
     def _tcp_feedback(self, side, message):
         pose = message.pose
+        received_at = time.monotonic()
+        # The pinned AgileX driver leaves frame_id empty; feedback uses the
+        # arm-local base frame selected by its namespace.
+        frame_id = str(message.header.frame_id) or f"{side}_base_link"
+        measured = {
+            "position": [pose.position.x, pose.position.y, pose.position.z],
+            "orientation": [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+        }
+        sample = None
         with self.lock:
-            self.arms[side]["tcp"] = {
-                "position": [pose.position.x, pose.position.y, pose.position.z],
-                "orientation": [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+            self.arms[side]["tcp"] = {**measured, "frame_id": frame_id}
+            self.arms[side]["tcp_stamp"] = received_at
+            target = self.tracking_targets[side]
+            if target:
+                sample = self._tracking_sample(side, target, measured, frame_id, received_at, message)
+                if sample:
+                    self.tracking_samples.append(sample)
+        if sample:
+            self.tracking_pub.publish(String(data=json.dumps(sample)))
+
+    def _tracking_sample(self, side, target, measured, frame_id, received_at, message):
+        target_pose = target.get("pose")
+        if not isinstance(target_pose, dict):
+            return None
+        age_s = received_at - target["issued_at"]
+        if age_s < 0 or age_s > self.pose_metrics_max_target_age_s:
+            return None
+        if received_at - self.last_pose_metric_at[side] < 1 / self.pose_metrics_hz:
+            return None
+        self.last_pose_metric_at[side] = received_at
+        if frame_id != target_pose.get("frame_id"):
+            return {
+                **target["context"], "stage": "tcp_tracking_error", "arm": side,
+                "result": "unavailable", "reason": "frame_mismatch",
+                "target_frame_id": target_pose.get("frame_id"), "feedback_frame_id": frame_id,
             }
+        position_error = _position_error_mm(target_pose["position"], measured["position"])
+        orientation_error = _orientation_error_deg(target_pose["orientation"], measured["orientation"])
+        stamp = message.header.stamp
+        return {
+            **target["context"], "stage": "tcp_tracking_error", "arm": side, "result": "measured",
+            "position_error_mm": position_error, "orientation_error_deg": orientation_error,
+            "target": target_pose, "measured": {**measured, "frame_id": frame_id},
+            "target_age_ms": age_s * 1000,
+            "feedback_stamp_sec": float(stamp.sec) + float(stamp.nanosec) / 1e9,
+        }
 
     def _servo_command(self, side, trajectory):
         with self.lock:
@@ -127,9 +196,12 @@ class StationBridge(Node):
                 fresh = time.monotonic() - sample["stamp"] < 0.5 and len(sample["joints"]) == 6
                 services = self.enable_clients[side].service_is_ready() and self.gate_clients[side].service_is_ready()
                 servo = self.twist_pubs[side].get_subscription_count() > 0
-                arms[side] = {"connected": fresh, "servo_ready": servo, "services_ready": services, "state": {"joints": sample["joints"], "gripper": sample["gripper"], "tcp": sample["tcp"]}}
+                tcp_fresh = time.monotonic() - sample["tcp_stamp"] < 0.5 and sample["tcp"] is not None
+                arms[side] = {"connected": fresh, "servo_ready": servo, "services_ready": services, "state": {"joints": sample["joints"], "gripper": sample["gripper"], "tcp": sample["tcp"], "tcp_fresh": tcp_fresh}}
             ready = all(arm["connected"] and arm["services_ready"] and arm["servo_ready"] for arm in arms.values())
-        return {"accepted": True, "ready": ready, "arms": arms}
+            tracking_samples = list(self.tracking_samples)
+            self.tracking_samples.clear()
+        return {"accepted": True, "ready": ready, "arms": arms, "tracking_samples": tracking_samples}
 
     async def _arm(self, payload):
         source = str(payload["source"])
@@ -190,6 +262,17 @@ class StationBridge(Node):
             if self.source != "dream" or not set(SIDES).issubset(self.gates_open):
                 raise RuntimeError("Dream source is not active")
         for side, start in (("left", 0), ("right", 7)):
+            target_pose = (payload.get("tcp_targets") or {}).get(side)
+            with self.lock:
+                self.tracking_targets[side] = {
+                    "pose": target_pose,
+                    "issued_at": time.monotonic(),
+                    "context": {
+                        "control_source": "dream", "operation_id": payload.get("operation_id"),
+                        "session_id": payload.get("session_id"), "sequence": payload.get("sequence_id"),
+                        "invocation_id": payload.get("invocation_id"),
+                    },
+                } if isinstance(target_pose, dict) else None
             self._publish_joint_state(side, [*(f"joint{index}" for index in range(1, 7)), "gripper"], [*values[start:start + 6], max(0.0, min(1.0, values[start + 6])) * 0.1])
         return {"accepted": True}
 

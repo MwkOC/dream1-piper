@@ -16,10 +16,12 @@ credentials.*
 outputs/
 experiments/data/
 node_modules/
+frontend/dist/
 log/
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
+ros2_ws/src/agx_arm_ros/
 
 # Referencias externas: conservar únicamente la propuesta de configuraciones.
 .references/*

@@ -259,6 +259,7 @@ class WorkerRuntime:
             scheduled=True,
             control_generation=generation,
             invocation_id=self.current_invocation_id,
+            tcp_targets=getattr(self.policy, "tcp_targets", lambda _values: {})(values),
         )
         await self._send(action_message(action))
 

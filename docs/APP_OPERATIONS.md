@@ -27,7 +27,7 @@ El estado de implementación del repo es:
 | Acceso LAN | FastAPI sirve UI/API con sesión de operador y TLS configurable | Certificados, firewall y acceso desde otra máquina dependen del despliegue |
 | Frontend | React + TypeScript 7, Tailwind 4, componentes accesibles y build Bun | Build local verificado; no hay browser E2E contra hardware |
 | API | FastAPI, OpenAPI y Scalar en `/api-docs` | Endpoints cubiertos parcialmente con tests unitarios, no desde hardware |
-| ROS 2 Jazzy | Driver AgileX, dos instancias MoveIt Servo y `station_bridge` definidos en `ros2_ws` | No se hizo `colcon build` ni movimiento físico en esta máquina |
+| ROS 2 Jazzy | Driver AgileX, dos instancias MoveIt Servo y `station_bridge` definidos en `ros2_ws` | `colcon build` del workspace validado; no se ha ejecutado movimiento físico desde la aplicación |
 | Control desde UI | Selector Dream/teleop, cámara, tarea, validación, Arm/Start/Pause/Home y jog con deadman | Teleop requiere bridge ROS y feedback real; Dream requiere credenciales válidas |
 | Métricas | Eventos y latencias en memoria + cola asíncrona a PostgreSQL; modelos/migración Alembic | Persistencia requiere Compose/Postgres; no se ha verificado Docker local |
 | Servicios | Contenedores `station` y `worker`; PostgreSQL es infraestructura. ROS launch vive en host Jazzy | No ejecutar perfil legado `piper_sdk` a la vez que los nodos ROS en los mismos CAN |
@@ -330,6 +330,7 @@ se duplican en TypeScript.
 | `RSTACK_CAN_LEFT`, `RSTACK_CAN_RIGHT` | Interfaces CAN; el launch ROS admite estos overrides. |
 | `RSTACK_ROBOT_SPEED_PERCENT` | Velocidad inicial del driver ROS, configurable en `.env`. |
 | `RSTACK_HOME_DURATION_S`, `RSTACK_HOME_TOLERANCE_RAD` | Tiempo y tolerancia de llegada para Home supervisado por feedback. |
+| `RSTACK_POSE_METRICS_HZ`, `RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS` | Frecuencia máxima por brazo y antigüedad límite para el error TCP; el launch ROS las lee desde el `.env` exportado. |
 | `RSTACK_METRICS_RETENTION_DAYS` | Retención detallada en configuración; limpieza automática aún pendiente. |
 | `ROS_DOMAIN_ID` | Dominio ROS local; mantener DDS dentro del host/red de control configurada. |
 | `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST`; ROS sólo descubre nodos en el mismo host. |
@@ -660,6 +661,7 @@ de control. Worker y estación se ejecutan en el mismo host. Registrar al menos:
 | Dream | Inicio/fin de request, tiempo de cliente/servidor/red cuando SDK lo ofrece, timeout y resultado. |
 | Movimiento | Duración DLS/IK o Servo, objetivo propuesto, límites aplicados y condición de singularidad/colisión. |
 | Ejecución | Acción recibida, validación, rechazo/motivo, publicación ROS, feedback/resultado y pausa. |
+| Precisión TCP | Error entre FK del objetivo aplicado y `feedback/tcp_pose` físico por brazo, en mm/grados y con edad/frame de feedback. |
 | Operación | Inicio/fin, duración total, fuente, brazo, tarea, acciones aceptadas/rechazadas y resultado final. |
 
 Las métricas detalladas se guardan en PostgreSQL mediante escritura asíncrona
@@ -723,6 +725,15 @@ desde SSE, con intervalo de refresco configurable y carga histórica desde la AP
 Mostrar unidades, intervalo, tamaño de muestra, brazo/fuente y huecos por pérdida
 de datos. Si la métrica no está disponible, mostrar “sin datos”; nunca un cero
 que parezca medición. Métricas son observabilidad, no una garantía de seguridad.
+
+El worker adjunta la pose TCP teórica (FK del objetivo articular) a cada acción.
+`station_bridge` la compara sin bloquear el envío, en muestras físicas frescas
+hasta la frecuencia configurada, y publica `/dream1/metrics/tcp_tracking`. Las
+muestras llegan a PostgreSQL como `stage_metrics` y se agregan en la UI. La
+comparación exige que `frame_id` coincida y descarta objetivos viejos; no se
+transforman coordenadas implícitamente. Ver
+[`POSE_METRICS_AND_ROSBAG.md`](POSE_METRICS_AND_ROSBAG.md) para sincronización y
+la evaluación de rosbag/MCAP.
 
 ## Organización modular requerida
 

@@ -12,7 +12,10 @@ from dream1_piper.services.station import StationService
 from dream1_piper.services.teleop import TeleopService, TwistInput
 from dream1_piper.services.worker_bridge import WorkerBridge
 from dream1_piper.worker.config import load_robot
+from dream1_piper.worker.control import PolicyAction
+from dream1_piper.worker.dream_policy import DreamDls
 from dream1_piper.worker.kinematics import UrdfArm
+from dream1_piper.worker.protocol import action_message, parse_action
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -141,3 +144,40 @@ def test_urdf_arm_exposes_forward_pose_and_jacobian():
     assert pose.shape == (4, 4)
     assert jacobian.shape == (6, 6)
     assert np.isfinite(pose).all()
+
+
+def test_tcp_targets_are_forward_kinematics_for_both_arm_frames():
+    arm = UrdfArm(
+        ROOT / "experiments/piper_station_worker/assets/piper/piper_arm.json"
+    )
+    target = DreamDls.tcp_targets(SimpleNamespace(arm=arm), tuple([*arm.rest, 0, *arm.rest, 0]))
+    assert target["left"]["frame_id"] == "left_base_link"
+    assert target["right"]["frame_id"] == "right_base_link"
+    np.testing.assert_allclose(target["left"]["position"], arm.forward(arm.rest)[:3, 3])
+    assert np.isclose(np.linalg.norm(target["right"]["orientation"]), 1.0)
+
+
+def test_action_protocol_carries_optional_tcp_targets():
+    targets = {"left": {"frame_id": "left_base_link", "position": [0.1, 0.2, 0.3]}}
+    action = PolicyAction("session", 3, 2, 10, 1, tuple([0.0] * 14), tcp_targets=targets)
+    assert parse_action(action_message(action)).tcp_targets == targets
+
+
+def test_tcp_tracking_summary_uses_millimeter_units():
+    metrics = MetricsService()
+    for error in (5.0, 10.0):
+        metrics.record({
+            "control_source": "dream",
+            "stage": "tcp_tracking_error",
+            "result": "measured",
+            "arm": "left",
+            "position_error_mm": error,
+            "orientation_error_deg": 2.0,
+            "target_age_ms": 15.0,
+        })
+    left = metrics.snapshot()["tcp_tracking"]["left"]
+    assert left["sample_count"] == 2
+    assert left["mean_mm"] == 7.5
+    assert left["p95_mm"] == 10.0
+    assert left["last_mm"] == 10.0
+    assert metrics.snapshot()["tcp_tracking"]["right"]["sample_count"] == 0

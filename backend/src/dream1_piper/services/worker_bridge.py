@@ -83,13 +83,25 @@ class WorkerBridge:
             return {"type": "ack", "accepted": False, "reason": rejection}
         values = message["values"]
         feedback = await self.gateway.command(
-            "dream_action", {"values": values, "generation": self.station.control_generation}
+            "dream_action",
+            {
+                "values": values,
+                "generation": self.station.control_generation,
+                "tcp_targets": message.get("tcp_targets", {}),
+                "session_id": message.get("session_id"),
+                "sequence_id": message.get("sequence_id"),
+                "invocation_id": message.get("invocation_id"),
+                "operation_id": (
+                    str(self.station.operation_id) if self.station.operation_id else None
+                ),
+            },
         )
         self.last_values = list(values)
         self.last_action_at = time.monotonic()
         action = self._action_record(message, values)
         action["proposed"]["named"] = self._named_values(values)
         action["applied"]["named"] = self._named_values(values)
+        action["applied"]["tcp_targets"] = message.get("tcp_targets", {})
         action["feedback"] = feedback if isinstance(feedback, dict) else {}
         self._record_action(action)
         return {"type": "ack", "accepted": True, "action_id": message.get("action_id")}
