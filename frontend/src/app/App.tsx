@@ -3,7 +3,7 @@ import { Moon, Sun } from "lucide-react";
 import { Login } from "./Login";
 import { OperationPanel } from "./OperationPanel";
 import { CameraPanel } from "./CameraPanel";
-import { ActivityPanel } from "./ActivityPanel";
+import { ActionSamplePanel } from "./ActionSamplePanel";
 import { TaskLibrary } from "./TaskLibrary";
 import { HistoryPanel } from "./HistoryPanel";
 import { useActivity } from "./useActivity";
@@ -17,7 +17,11 @@ type Theme = "dark" | "light";
 
 export function App() {
   const { status, error, refresh } = useStation();
-  const { events, connected } = useActivity();
+  const { latestAction, latestObservation, connection } = useActivity(eventType => {
+    if (["status", "camera", "worker", "worker_health", "control", "fault"].includes(eventType)) {
+      void refresh();
+    }
+  });
   const [authenticated, setAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [view, setView] = useState<View>("operation");
@@ -43,15 +47,22 @@ export function App() {
         <StatusCard label="Estación" value={status.state} accent={status.state === "FAULT" ? "text-red-600" : status.state === "RUNNING" ? "text-green-600" : ""} />
         <StatusCard label="Modo" value={status.control_source === "dream" ? "DreamLabs" : status.control_source === "teleop" ? "Teleoperación" : "En espera"} />
         <StatusCard label="Worker" value={status.worker_connected ? "Conectado" : "Desconectado"} accent={status.worker_connected ? "text-green-600" : "text-zinc-500"} />
-        <StatusCard label="Actividad" value={connected ? "En vivo" : "Reconectando"} accent={connected ? "text-green-600" : "text-amber-600"} />
+        <StatusCard label="Actividad" value={activityStatusLabel(connection)} accent={connection === "live" ? "text-green-600" : connection === "auth_required" ? "text-red-600" : "text-amber-600"} />
       </section>
       <nav className="flex gap-2 overflow-x-auto border-b border-zinc-300 dark:border-zinc-800" aria-label="Secciones">
         {([["operation", "Operación"], ["tasks", "Tareas"], ["history", "Historial"]] as const).map(([key, label]) => <button key={key} onClick={() => setView(key)} className={`border-b-2 px-4 py-2 text-sm font-medium ${view === key ? "border-red-600 text-red-700 dark:text-red-400" : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}>{label}</button>)}
       </nav>
-      {view === "operation" && <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(340px,1fr)]"><div className="grid content-start gap-4"><CameraPanel status={status} /><OperationPanel status={status} onChange={() => void refresh()} /></div><div className="grid content-start gap-4"><ActivityPanel events={events} connected={connected} /><MetricsPanel status={status} /></div></div>}
+      {view === "operation" && <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(340px,1fr)]"><div className="grid content-start gap-4"><CameraPanel status={status} observation={latestObservation} /><OperationPanel status={status} onChange={() => void refresh()} /></div><div className="grid content-start gap-4"><ActionSamplePanel action={latestAction} /><MetricsPanel status={status} /></div></div>}
       {view === "tasks" && <TaskLibrary disabled={!stationIdle} onSelect={async task => { await api.task(task.prompt, task.task_id); await refresh(); setView("operation"); }} />}
       {view === "history" && <HistoryPanel disabled={!stationIdle} onPurged={() => void refresh()} />}
       {status.last_fault && <div role="alert" className="rounded-xl border border-red-400 bg-red-50 p-3 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">Fallo: {status.last_fault}</div>}
     </>}
   </main>;
+}
+
+function activityStatusLabel(connection: ReturnType<typeof useActivity>["connection"]) {
+  if (connection === "live") return "En vivo";
+  if (connection === "connecting") return "Conectando";
+  if (connection === "auth_required") return "Sesión requerida";
+  return "Reconectando";
 }

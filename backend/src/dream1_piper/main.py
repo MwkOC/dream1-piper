@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import add_scalar_reference
@@ -26,6 +27,7 @@ from dream1_piper.services.worker_bridge import WorkerBridge
 
 
 def _event_sink(app, event_type, data):
+    data = jsonable_encoder(data)
     item = app.state.event_bus.publish(event_type, data)
     app.state.metrics.record({"type": event_type, **data})
     app.state.event_writer.submit(event_type, {"event_id": item["event_id"], **data})
@@ -127,6 +129,17 @@ def _make_lifespan(config, database, ros_gateway, cameras, event_writer, reposit
         _initialize_resources(
             application, config, database, ros_gateway, cameras, event_writer, repository
         )
+        if application.state.database is not None:
+            if not await application.state.database.check():
+                await application.state.database.close()
+                raise RuntimeError("PostgreSQL unavailable")
+        if config.storage_backend == "postgres":
+            saved = await application.state.repository.get_selection()
+            if saved is not None:
+                application.state.station.task = saved["task"]
+                application.state.station.task_id = saved.get("task_id")
+            for sample in await application.state.repository.recent_metrics(config.memory_history_limit):
+                application.state.metrics.record(sample)
         await application.state.event_writer.start()
         probe = asyncio.create_task(_probe_ros(application))
         try:
@@ -149,7 +162,7 @@ def _initialize_resources(
         memory_store = MemoryStore(config.memory_history_limit)
         application.state.database = None
     else:
-        application.state.database = database or Database(config.database_url.get_secret_value())
+        application.state.database = database or Database(config.database_url.get_secret_value(), config)
     application.state.event_bus = EventBus(history_size=config.memory_history_limit)
     application.state.metrics = MetricsService(config.memory_history_limit)
     application.state.event_writer = event_writer or _event_writer(
@@ -240,9 +253,11 @@ async def _shutdown(application, probe):
     probe.cancel()
     await asyncio.gather(probe, return_exceptions=True)
     application.state.cameras.close()
-    await application.state.event_writer.close()
-    if application.state.database is not None:
-        await application.state.database.close()
+    try:
+        await application.state.event_writer.close()
+    finally:
+        if application.state.database is not None:
+            await application.state.database.close()
 
 
 def _project_path(value):

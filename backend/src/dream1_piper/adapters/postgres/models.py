@@ -65,6 +65,7 @@ class ActionRecord(Base):
     proposed: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     applied: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     feedback: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
 
 class StageMetric(Base):

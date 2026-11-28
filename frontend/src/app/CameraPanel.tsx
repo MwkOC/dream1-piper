@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { StationStatus } from "../lib/api/client";
+import type { ActivityEvent } from "./useActivity";
 
 const cameras = [
   { id: "top", label: "Cenital" },
@@ -7,9 +8,13 @@ const cameras = [
   { id: "right", label: "Muñeca derecha" },
 ] as const;
 
-export function CameraPanel({ status }: { status: StationStatus }) {
+export function CameraPanel({ status, observation }: { status: StationStatus; observation: ActivityEvent | null }) {
   const [tick, setTick] = useState(Date.now());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const observationData = observation?.data ?? {};
+  const cameraHealth = observationData.cameras as Record<string, { connected?: boolean; age_ms?: number | null }> | undefined;
+  const observationId = observationData.observation_id;
+  const observationAge = observation ? Math.max(0, tick - Date.parse(observation.received_at)) : null;
   useEffect(() => {
     const timer = window.setInterval(() => setTick(Date.now()), 500);
     return () => window.clearInterval(timer);
@@ -19,6 +24,11 @@ export function CameraPanel({ status }: { status: StationStatus }) {
     <div className="grid gap-3 md:grid-cols-3">{cameras.map(camera => <button key={camera.id} onClick={() => setExpanded(expanded === camera.id ? null : camera.id)} className={`overflow-hidden rounded-xl border text-left ${expanded === camera.id ? "md:col-span-3" : ""} border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-black`}>
       <img className="aspect-video w-full object-contain" src={`/api/v1/cameras/${camera.id}.jpg?time=${tick}`} alt={camera.label} />
       <span className="flex items-center justify-between p-2 text-sm"><span>{camera.label}</span><span className={status.cameras[camera.id]?.connected ? "text-green-600" : "text-red-500"}>{status.cameras[camera.id]?.connected ? "Conectada" : "Sin señal"}</span></span>
+      <span className="flex flex-wrap justify-between gap-x-2 px-2 pb-2 text-[11px] text-zinc-500"><span>Observación {observationId == null ? "—" : String(observationId)}</span><span>{observationAge == null ? "sin observación" : `hace ${(observationAge / 1000).toFixed(1)} s`}</span><span>{formatCameraAge(cameraHealth?.[camera.id]?.age_ms)}</span></span>
     </button>)}</div>
   </section>;
+}
+
+function formatCameraAge(age: number | null | undefined) {
+  return age == null ? "frame sin edad" : `frame ${Math.round(age)} ms`;
 }

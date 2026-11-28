@@ -1,4 +1,9 @@
 import asyncio
+import logging
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import OperationalError, InterfaceError
+
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -19,6 +24,8 @@ class EventWriter:
         self.task = None
 
     def submit(self, event_type, data):
+        data = jsonable_encoder(data)
+        data.setdefault("event_id", str(uuid4()))
         try:
             self.queue.put_nowait((event_type, data))
         except asyncio.QueueFull:
@@ -31,7 +38,7 @@ class EventWriter:
         if self.task is None:
             return
         try:
-            await asyncio.wait_for(self.queue.join(), timeout=2.0)
+            await asyncio.wait_for(self.queue.join(), timeout=10.0)
         except TimeoutError:
             self.dropped += self.queue.qsize()
         self.task.cancel()
@@ -48,7 +55,20 @@ class EventWriter:
         while True:
             event_type, data = await self.queue.get()
             try:
-                await self._store(event_type, data)
+                for attempt in range(4):
+                    try:
+                        await self._store(event_type, data)
+                        break
+                    except (OperationalError, InterfaceError, OSError, TimeoutError):
+                        if attempt == 3:
+                            self.dropped += 1
+                            logging.getLogger(__name__).warning("Event persistence unavailable")
+                        else:
+                            await asyncio.sleep(0.5 * 2 ** attempt)
+                    except Exception:
+                        self.dropped += 1
+                        logging.getLogger(__name__).warning("Event persistence rejected")
+                        break
             finally:
                 self.queue.task_done()
 
@@ -61,13 +81,16 @@ class EventWriter:
             created_at=datetime.now(UTC),
             data=data,
         )
-        try:
-            async with self.database.sessions() as session:
-                session.add(item)
+        async with self.database.sessions.begin() as session:
+            values = {column.name: getattr(item, column.name)
+                      for column in SystemEvent.__table__.columns}
+            inserted = await session.scalar(
+                insert(SystemEvent).values(**values)
+                .on_conflict_do_nothing(index_elements=[SystemEvent.event_id])
+                .returning(SystemEvent.event_id)
+            )
+            if inserted is not None:
                 await self._write_typed_event(session, event_type, data)
-                await session.commit()
-        except Exception:
-            self.dropped += 1
 
     async def _write_typed_event(self, session, event_type, data):
         if event_type == "operation.started":
@@ -152,6 +175,7 @@ class EventWriter:
                 proposed=data.get("proposed", {}),
                 applied=data.get("applied", {}),
                 feedback=data.get("feedback", {}),
+                details=data.get("details", {}),
             )
         )
 

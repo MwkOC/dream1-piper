@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         ),
         validation_alias="DATABASE_URL",
     )
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_max_overflow: int = Field(default=5, ge=0, le=50)
+    database_pool_timeout: float = Field(default=2, gt=0)
+    database_pool_recycle: int = Field(default=1800, gt=0)
     station_ws_host: str = "127.0.0.1"
     station_ws_port: int = 8765
     ros_bridge_url: str = "ws://127.0.0.1:8766"
@@ -49,6 +53,7 @@ class Settings(BaseSettings):
     metrics_queue_size: int = 10000
     metrics_retention_days: int = 30
     events_heartbeat_seconds: float = 15.0
+    events_fallback_poll_ms: int = 2000
     ui_tls_cert: str | None = None
     ui_tls_key: str | None = None
     camera_left_device: str | None = None
@@ -64,6 +69,8 @@ class Settings(BaseSettings):
             raise ValueError("RSTACK_MEMORY_HISTORY_LIMIT must be between 1 and 100000")
         if self.events_heartbeat_seconds <= 0:
             raise ValueError("RSTACK_EVENTS_HEARTBEAT_SECONDS must be greater than 0")
+        if not 250 <= self.events_fallback_poll_ms <= 60000:
+            raise ValueError("RSTACK_EVENTS_FALLBACK_POLL_MS must be between 250 and 60000")
         if self.environment != "production":
             return
         if self.storage_backend == "memory":

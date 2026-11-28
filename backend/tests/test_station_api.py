@@ -71,9 +71,19 @@ class FakeRosGateway:
 
 
 class FakeRepository:
+    async def get_selection(self):
+        return None
+
+    async def save_selection(self, task, task_id):
+        self.selection = {"task": task, "task_id": task_id}
+
+    async def recent_metrics(self, limit):
+        return []
+
     def __init__(self):
         self.tasks = {}
         self.operations = []
+        self.action_rows = []
 
     async def list_tasks(self):
         return list(self.tasks.values())
@@ -112,9 +122,16 @@ class FakeRepository:
             (item for item in self.operations if item["operation_id"] == str(operation_id)), None
         )
 
+    async def list_actions(self, operation_id, limit, offset):
+        if not any(item["operation_id"] == str(operation_id) for item in self.operations):
+            return None
+        rows = [item for item in self.action_rows if item["operation_id"] == str(operation_id)]
+        return {"items": rows[offset : offset + limit], "total": len(rows), "limit": limit, "offset": offset}
+
     async def purge_all(self):
         self.tasks.clear()
         self.operations.clear()
+        self.action_rows.clear()
 
 
 def app_with_fakes(gateway, repository=None):
@@ -277,6 +294,8 @@ def test_authenticated_sse_stream_sends_connect_comment_and_live_events():
 
         async def consume_stream():
             response = await event_stream(SimpleNamespace(app=client.app))
+            assert response.headers["cache-control"] == "no-cache, no-transform"
+            assert response.headers["x-accel-buffering"] == "no"
             iterator = response.body_iterator.__aiter__()
             assert await iterator.__anext__() == ": connected\n\n"
             client.app.state.event_bus.publish("status", {"state": "READY"})
@@ -286,6 +305,14 @@ def test_authenticated_sse_stream_sends_connect_comment_and_live_events():
             await iterator.aclose()
 
         asyncio.run(consume_stream())
+
+
+def test_status_exposes_activity_fallback_interval():
+    app = app_with_fakes(FakeRosGateway())
+    with TestClient(app) as client:
+        response = client.get("/api/v1/status")
+    assert response.status_code == 200
+    assert response.json()["events_fallback_poll_ms"] == 2000
 
 
 def test_task_crud_operation_history_and_guarded_full_purge():
@@ -316,8 +343,14 @@ def test_task_crud_operation_history_and_guarded_full_purge():
         repository.operations.append(
             {"operation_id": operation_id, "task_snapshot": app.state.station.task}
         )
+        repository.action_rows.append({"operation_id": operation_id, "sequence": 1})
         assert client.get("/api/v1/operations").json()[0]["operation_id"] == operation_id
         assert client.get(f"/api/v1/operations/{operation_id}").status_code == 200
+        actions = client.get(f"/api/v1/operations/{operation_id}/actions?limit=1&offset=0")
+        assert actions.status_code == 200
+        assert actions.json()["items"] == [{"operation_id": operation_id, "sequence": 1}]
+        assert actions.json()["total"] == 1
+        assert client.get(f"/api/v1/operations/{operation_id}/actions?limit=0").status_code == 422
 
         app.state.station.state = app.state.station.state.RUNNING
         blocked = client.request(

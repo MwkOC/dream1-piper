@@ -376,6 +376,7 @@ se duplican en TypeScript.
 | `RSTACK_MEMORY_HISTORY_LIMIT` | `100000`; máximo configurable (tope 100000) de muestras por colección de memoria, EventBus y acumulador de métricas; al llenarse, descarta las más antiguas. |
 | `RSTACK_METRICS_QUEUE_SIZE` | `10000`; capacidad de la cola asíncrona de escritura, separada del límite de retención de 100000 muestras. |
 | `RSTACK_EVENTS_HEARTBEAT_SECONDS` | `15`; intervalo de keepalive SSE para mantener visible la conexión de actividad cuando no hay eventos. |
+| `RSTACK_EVENTS_FALLBACK_POLL_MS` | `2000`; intervalo del sondeo de historial que mantiene Actividad actualizada mientras SSE se reconecta (rango 250–60000 ms). |
 | `DATABASE_URL` | DSN PostgreSQL para la estación; sólo se usa con backend `postgres`; en Compose usa `127.0.0.1:${POSTGRES_PORT}` por red host. |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credenciales de inicialización PostgreSQL; sólo se requieren para activar el perfil `database`. |
 | `POSTGRES_PORT`, `POSTGRES_IMAGE` | Puerto de host sólo en `127.0.0.1`; imagen con major compatible y digest probado en release. |
@@ -872,3 +873,10 @@ con velocidad limitada y área despejada:
 Las pruebas automatizadas no habilitan motores ni accionan el robot real. La
 aceptación de software no sustituye el chequeo humano de cámara/modelo, revisión
 de límites/calibración ni procedimiento físico de seguridad del laboratorio.
+# Streams de operación e historial
+
+La pantalla de operación mantiene dos datos en vivo separados: la última trama `action` recibida por la estación y la última observación enviada al worker. La trama de acción muestra secuencia, resultado, valores propuestos/aplicados, feedback ROS y metadatos de correlación. Los eventos `observation`, métricas, cámaras y estado no reemplazan la muestra de acción.
+
+Las miniaturas JPEG se actualizan mediante polling independiente. El indicador de observación dentro de cada cámara muestra el ID/edad de la última observación del worker y la edad de frame reportada por la estación; ambos datos son indicadores recientes, no una garantía de que el JPEG mostrado sea exactamente el frame usado por esa observación.
+
+El historial de una operación consulta las acciones por páginas mediante `GET /api/v1/operations/{operation_id}/actions?limit=50&offset=0`. El detalle de acción conserva los valores propuestos/aplicados, feedback ROS y correlación worker (`observation_id`, reloj monotónico de estación, planificación y generación de control). En memoria se conserva el límite configurado por `RSTACK_MEMORY_HISTORY_LIMIT`; PostgreSQL mantiene el historial persistente y usa la migración inicial consolidada `0001_system_events` (requiere una base nueva si se aplicó la cadena anterior).

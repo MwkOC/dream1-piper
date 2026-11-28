@@ -102,7 +102,9 @@ def test_memory_history_retention_and_purge_clear_collections():
         await writer.flush()
         assert len(await repository.list_operations(limit=10, offset=0)) == 2
         detail = await repository.operation_detail(operation_ids[-1])
-        assert len(detail["actions"]) == 1
+        assert detail["action_count"] == 1
+        actions = await repository.list_actions(operation_ids[-1], limit=1, offset=0)
+        assert len(actions["items"]) == 1
         assert len(detail["metrics"]) == 1
         assert writer.dropped > 0
         await repository.purge_all()

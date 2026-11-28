@@ -96,14 +96,26 @@ class MemoryRepository:
             return None
         return self._operation_detail(operation)
 
+    async def list_actions(self, operation_id, limit, offset):
+        if not any(str(row["operation_id"]) == str(operation_id) for row in self.store.operations):
+            return None
+        rows = [row for row in self.store.actions if str(row.get("operation_id")) == str(operation_id)]
+        rows.sort(key=lambda row: (row["created_at"], str(row["action_id"])), reverse=True)
+        return {"items": rows[offset : offset + limit], "total": len(rows), "limit": limit, "offset": offset}
+
     def _operation_detail(self, operation):
         result = dict(operation)
-        for name in ("actions", "invocations", "metrics", "events"):
+        result["action_count"] = sum(
+            str(row.get("operation_id")) == str(operation["operation_id"])
+            for row in self.store.actions
+        )
+        for name in ("invocations", "metrics", "events"):
             collection = getattr(self.store, name)
             result[name] = [
                 row
                 for row in collection
                 if str(row.get("operation_id")) == str(operation["operation_id"])
+                and row.get("event_type") != "action"
             ]
         return result
 
@@ -255,6 +267,7 @@ class MemoryEventWriter:
             "proposed": data.get("proposed", {}),
             "applied": data.get("applied", {}),
             "feedback": data.get("feedback", {}),
+            "details": data.get("details", {}),
         }
         self.store.append(self.store.actions, item)
 

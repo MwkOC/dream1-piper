@@ -68,11 +68,12 @@ async def test_worker_bridge_rejects_unsafe_actions_and_publishes_valid_action()
     station.start(uuid4())
     gateway = Gateway()
     limits = [{"minimum": -1.0, "maximum": 1.0, "max_speed": 1.0}] * 14
+    published = []
     bridge = WorkerBridge(
         station,
         gateway,
         MetricsService(),
-        SimpleNamespace(publish=lambda *_: None),
+        SimpleNamespace(publish=lambda *args: published.append(args)),
         "action",
         limits,
         [f"joint_{index}" for index in range(14)],
@@ -87,10 +88,18 @@ async def test_worker_bridge_rejects_unsafe_actions_and_publishes_valid_action()
         "values": [0.0] * 14,
         "control_generation": station.control_generation,
         "sequence_id": 1,
+        "observation_id": 2**60,
+        "station_monotonic_ns": 2**60 + 5,
+        "scheduled": True,
     }
     accepted = await bridge.handle(action)
     assert accepted["accepted"] is True
     assert gateway.commands[-1][0] == "dream_action"
+    assert gateway.commands[-1][1]["values"] == action["values"]
+    assert gateway.commands[-1][1]["generation"] == station.control_generation
+    action_event = next(data for name, data in published if name == "action" and data["result"] == "accepted")
+    assert action_event["details"]["observation_id"] == str(2**60)
+    assert action_event["details"]["scheduled"] is True
 
 
 def test_teleop_requires_selected_arm_fresh_sequence_and_vector_limits():

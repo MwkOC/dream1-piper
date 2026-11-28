@@ -80,3 +80,4 @@ class StatusResponse(BaseModel):
     cameras: dict[str, dict[str, object]]
     last_fault: str | None
     teleop_limits: TeleopLimits
+    events_fallback_poll_ms: int

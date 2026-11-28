@@ -1,5 +1,6 @@
 import math
 import time
+from uuid import uuid4
 
 
 class WorkerBridge:
@@ -27,6 +28,8 @@ class WorkerBridge:
             return {"type": "hello", "accepted": True, "mode": self.mode}
         if kind == "rtc_status":
             self.events.publish("worker_health", message)
+            if self.event_writer:
+                self.event_writer.submit("worker_health", message)
             metric = {
                 "control_source": "dream",
                 "stage": "inference",
@@ -35,6 +38,8 @@ class WorkerBridge:
                 "operation_id": self.station.operation_id,
             }
             self.metrics.record(metric)
+            if self.event_writer:
+                self.event_writer.submit("metric", metric)
             return {"type": "ack", "accepted": True}
         if kind == "metric":
             metric = {
@@ -64,18 +69,13 @@ class WorkerBridge:
     async def _handle_action(self, message):
         rejection = self._action_rejection(message)
         if rejection:
-            rejected = {
-                "control_source": "dream",
-                "operation_id": self.station.operation_id,
-                "sequence": message.get("sequence_id"),
-                "result": "rejected",
-                "reason": rejection,
-                "proposed": {
-                    "values": message.get("values", []),
-                    "named": self._named_values(message.get("values", []))
-                    if isinstance(message.get("values"), list)
-                    else {},
-                },
+            rejected = self._base_action_record(message, "rejected")
+            rejected["reason"] = rejection
+            rejected["proposed"] = {
+                "values": message.get("values", []),
+                "named": self._named_values(message.get("values", []))
+                if isinstance(message.get("values"), list)
+                else {},
             }
             self.events.publish("action", rejected)
             if self.event_writer and self.station.operation_id:
@@ -104,7 +104,7 @@ class WorkerBridge:
         action["applied"]["tcp_targets"] = message.get("tcp_targets", {})
         action["feedback"] = feedback if isinstance(feedback, dict) else {}
         self._record_action(action)
-        return {"type": "ack", "accepted": True, "action_id": message.get("action_id")}
+        return {"type": "ack", "accepted": True, "action_id": action["action_id"]}
 
     def _action_rejection(self, message):
         if self.mode != "action" or self.station.state.value != "RUNNING":
@@ -122,15 +122,29 @@ class WorkerBridge:
 
     def _action_record(self, message, values):
         return {
-            "control_source": "dream",
-            "action_id": message.get("action_id"),
-            "sequence": message.get("sequence_id"),
-            "invocation_id": message.get("invocation_id"),
-            "operation_id": self.station.operation_id,
-            "result": "accepted",
+            **self._base_action_record(message, "accepted"),
             "proposed": {"values": values},
             "applied": {"values": values},
             "feedback": {},
+        }
+
+    def _base_action_record(self, message, result):
+        details = {
+            key: message.get(key)
+            for key in ("observation_id", "station_monotonic_ns", "scheduled", "control_generation", "schema_version", "session_id")
+            if message.get(key) is not None
+        }
+        for key in ("observation_id", "station_monotonic_ns"):
+            if key in details:
+                details[key] = str(details[key])
+        return {
+            "control_source": "dream",
+            "action_id": message.get("action_id") or str(uuid4()),
+            "sequence": message.get("sequence_id"),
+            "invocation_id": message.get("invocation_id"),
+            "operation_id": self.station.operation_id,
+            "result": result,
+            "details": details,
         }
 
     def _named_values(self, values):

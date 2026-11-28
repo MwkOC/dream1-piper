@@ -6,6 +6,13 @@ export type RunState = components["schemas"]["RunState"];
 export type ControlSource = components["schemas"]["ControlSource"];
 type OperationCommand = components["schemas"]["OperationCommand"];
 
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 const http = createClient<paths>({
   baseUrl: "",
   fetch: request => fetch(request, { credentials: "include" }),
@@ -17,7 +24,7 @@ async function unwrap<T>(result: Promise<{ data?: T; error?: unknown; response: 
     const detail = typeof error === "object" && error !== null && "detail" in error
       ? String(error.detail)
       : response.statusText;
-    throw new Error(detail || `HTTP ${response.status}`);
+    throw new ApiError(detail || `HTTP ${response.status}`, response.status);
   }
   return data as T;
 }
@@ -29,7 +36,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail ?? `HTTP ${response.status}`);
+  if (!response.ok) throw new ApiError(body.detail ?? `HTTP ${response.status}`, response.status);
   return body as T;
 }
 
@@ -40,6 +47,13 @@ export type OperationRecord = {
   operation_id: string; task_id: string | null; task_snapshot: string; control_source: string;
   selected_arm: string | null; started_at: string; ended_at: string | null; result: string | null;
 };
+export type ActionRecord = {
+  action_id: string; operation_id: string; invocation_id: string | null; control_source: string;
+  arm: string | null; sequence: number | null; result: string; created_at: string;
+  proposed: Record<string, unknown>; applied: Record<string, unknown>; feedback: Record<string, unknown>;
+  details: Record<string, unknown>;
+};
+export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 export type ActivityRecord = {
   event_id: string;
   type: string;
@@ -96,6 +110,9 @@ export const api = {
     items: ActivityRecord[]; total: number; limit: number; offset: number;
   }>(`/api/v1/events/history?limit=${limit}&offset=${offset}`),
   operation: (id: string) => request<Record<string, unknown>>(`/api/v1/operations/${id}`),
+  operationActions: (id: string, limit = 50, offset = 0) => request<Page<ActionRecord>>(
+    `/api/v1/operations/${id}/actions?limit=${limit}&offset=${offset}`,
+  ),
   purgeHistory: () => request<{ deleted: boolean }>("/api/v1/history", {
     method: "DELETE", body: JSON.stringify({ confirmation: "DELETE ALL DATA" }),
   }),

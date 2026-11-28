@@ -52,6 +52,7 @@ async def get_status(request: Request, service=Depends(station)):
             "linear_limit_m_s": float(config.teleop_linear_limit_m_s),
             "angular_limit_rad_s": float(config.teleop_angular_limit_rad_s),
         },
+        "events_fallback_poll_ms": config.events_fallback_poll_ms,
     }
 
 
@@ -184,6 +185,10 @@ async def set_task(body: TaskCommand, request: Request, service=Depends(station)
             if saved is None:
                 raise HTTPException(status_code=404, detail="task not found")
             task = saved["prompt"]
+        if service.state.value not in {"READY", "PAUSED"}:
+            raise ValueError("task can only change while READY or PAUSED")
+        if request.app.state.storage_backend == "postgres":
+            await request.app.state.repository.save_selection(task.strip(), body.task_id)
         result = service.set_task(task, body.task_id)
         socket = getattr(request.app.state, "worker_socket", None)
         if socket is not None:
@@ -230,6 +235,16 @@ async def list_operations(request: Request, limit: int = 50, offset: int = 0):
 @router.get("/operations/{operation_id}", dependencies=[Depends(require_operator)])
 async def operation_detail(operation_id: UUID, request: Request):
     result = await request.app.state.repository.operation_detail(operation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="operation not found")
+    return result
+
+
+@router.get("/operations/{operation_id}/actions", dependencies=[Depends(require_operator)])
+async def operation_actions(operation_id: UUID, request: Request, limit: int = 50, offset: int = 0):
+    if not 1 <= limit <= 100 or offset < 0:
+        raise HTTPException(status_code=422, detail="limit must be 1..100 and offset >= 0")
+    result = await request.app.state.repository.list_actions(operation_id, limit, offset)
     if result is None:
         raise HTTPException(status_code=404, detail="operation not found")
     return result
@@ -324,7 +339,15 @@ async def events(request: Request):
         finally:
             request.app.state.event_bus.unsubscribe(queue)
 
-    return StreamingResponse(stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.websocket("/teleop")
@@ -455,14 +478,15 @@ async def _push_worker_observations(socket):
                 now = asyncio.get_running_loop().time()
                 if now - last_trace_at >= 1.0:
                     state_names = app.state.robot_profile["schema"]["state_names"]
-                    app.state.event_bus.publish(
-                        "observation",
+                    from dream1_piper.main import _event_sink
+                    _event_sink(
+                        app, "observation",
                         {
                             "operation_id": station_state.operation_id,
                             "control_source": "dream",
                             "task": station_state.task,
                             "state": dict(zip(state_names, observation["state"], strict=True)),
-                            "observation_id": observation["observation_id"],
+                            "observation_id": str(observation["observation_id"]),
                             "cameras": app.state.cameras.health(),
                         },
                     )

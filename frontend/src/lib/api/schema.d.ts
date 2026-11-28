@@ -246,6 +246,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/{operation_id}/actions": {
+        parameters: {
+            query?: { limit?: number; offset?: number };
+            header?: never;
+            path: { operation_id: string };
+            cookie?: never;
+        };
+        /** Paginated action samples for one operation */
+        get: operations["operation_actions_api_v1_operations__operation_id__actions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/history": {
         parameters: {
             query?: never;
@@ -431,6 +448,7 @@ export interface components {
             /** Last Fault */
             last_fault: string | null;
             teleop_limits: components["schemas"]["TeleopLimits"];
+            events_fallback_poll_ms: number;
         };
         /** StorageReadiness */
         StorageReadiness: {
@@ -996,6 +1014,19 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+        };
+    };
+    operation_actions_api_v1_operations__operation_id__actions_get: {
+        parameters: {
+            query?: { limit?: number; offset?: number };
+            header?: never;
+            path: { operation_id: string };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: { headers: { [name: string]: unknown }; content: { "application/json": unknown } };
+            422: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["HTTPValidationError"] } };
         };
     };
     purge_history_api_v1_history_delete: {
