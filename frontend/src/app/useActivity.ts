@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import type { ActivityRecord } from "../lib/api/client";
 
-export type ActivityEvent = { event_id: string; type: string; data: Record<string, unknown>; received_at: string };
+export type ActivityEvent = ActivityRecord;
 
 export function useActivity() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);

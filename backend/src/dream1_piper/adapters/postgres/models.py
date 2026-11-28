@@ -84,7 +84,10 @@ class StageMetric(Base):
 
 class SystemEvent(Base):
     __tablename__ = "system_events"
-    __table_args__ = (Index("ix_system_events_operation_time", "operation_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_system_events_operation_time", "operation_id", "created_at"),
+        Index("ix_system_events_created_at", "created_at"),
+    )
 
     event_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     operation_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)

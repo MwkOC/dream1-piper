@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from dream1_piper.api.v1.routes import events as event_stream
 from dream1_piper.core.settings import Settings
 from dream1_piper.main import create_app
 
@@ -204,6 +206,86 @@ def test_validate_and_teleop_deadman_start_pause_lifecycle():
         assert gateway.commands[0][0] == "arm"
         assert any(kind == "start" for kind, _ in gateway.commands)
         assert any(kind == "stop" for kind, _ in gateway.commands)
+
+
+def test_operator_ui_worker_websocket_forwards_dream_action_to_ros_gateway():
+    gateway = FakeRosGateway()
+    app = app_with_fakes(gateway)
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/session", json={"operator_token": "operator-token"})
+        assert login.status_code == 200
+        with client.websocket_connect(
+            "/api/v1/worker", headers={"Authorization": "Bearer worker-token"}
+        ) as worker:
+            hello = worker.receive_json()
+            assert hello["type"] == "hello"
+            assert hello["read_only"] is False
+            worker.send_json({"type": "hello"})
+            handshake_ack = worker.receive_json()
+            while handshake_ack.get("type") == "control_state":
+                handshake_ack = worker.receive_json()
+            assert handshake_ack == {"type": "hello", "accepted": True, "mode": "action"}
+
+            assert (
+                client.post("/api/v1/validate", json={"request_id": str(uuid4())}).status_code
+                == 200
+            )
+            armed = client.post(
+                "/api/v1/arm",
+                json={
+                    "request_id": str(uuid4()),
+                    "control_source": "dream",
+                    "selected_arm": None,
+                },
+            )
+            assert armed.status_code == 200
+            started = client.post("/api/v1/start", json={"request_id": str(uuid4())})
+            assert started.status_code == 200
+
+            action_id = str(uuid4())
+            worker.send_json(
+                {
+                    "type": "action",
+                    "action_id": action_id,
+                    "sequence_id": 1,
+                    "control_generation": started.json()["control_generation"],
+                    "values": [0.0] * 14,
+                    "tcp_targets": {},
+                }
+            )
+            response = None
+            for _ in range(5):
+                message = worker.receive_json()
+                if message.get("action_id") == action_id:
+                    response = message
+                    break
+            assert response == {"type": "ack", "accepted": True, "action_id": action_id}
+            assert any(kind == "dream_action" for kind, _ in gateway.commands)
+
+
+def test_authenticated_sse_stream_sends_connect_comment_and_live_events():
+    import asyncio
+
+    app = app_with_fakes(FakeRosGateway())
+    with TestClient(app) as client:
+        assert (
+            client.post(
+                "/api/v1/auth/session", json={"operator_token": "operator-token"}
+            ).status_code
+            == 200
+        )
+
+        async def consume_stream():
+            response = await event_stream(SimpleNamespace(app=client.app))
+            iterator = response.body_iterator.__aiter__()
+            assert await iterator.__anext__() == ": connected\n\n"
+            client.app.state.event_bus.publish("status", {"state": "READY"})
+            message = await iterator.__anext__()
+            assert "event: status\n" in message
+            assert '"state": "READY"' in message
+            await iterator.aclose()
+
+        asyncio.run(consume_stream())
 
 
 def test_task_crud_operation_history_and_guarded_full_purge():

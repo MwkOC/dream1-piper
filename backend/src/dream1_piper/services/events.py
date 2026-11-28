@@ -1,5 +1,7 @@
 import asyncio
 from collections import deque
+from datetime import UTC, datetime
+from itertools import islice
 from math import ceil
 from uuid import uuid4
 
@@ -25,9 +27,9 @@ class EventBus:
     def subscribe(self):
         queue = asyncio.Queue(self.subscriber_size)
         self.subscribers.add(queue)
-        for event in self.history:
-            if not queue.full():
-                queue.put_nowait(event)
+        recent = list(islice(reversed(self.history), self.subscriber_size))
+        for event in reversed(recent):
+            queue.put_nowait(event)
         return queue
 
     def unsubscribe(self, queue):
@@ -45,12 +47,16 @@ class EventBus:
 
 
 class MetricsService:
-    def __init__(self):
-        self.samples = deque(maxlen=10000)
+    def __init__(self, history_size=10000):
+        self.samples = deque(maxlen=history_size)
         self.dropped = 0
 
     def record(self, metric):
-        self.samples.append(metric)
+        if len(self.samples) == self.samples.maxlen:
+            self.dropped += 1
+        sample = dict(metric)
+        sample.setdefault("recorded_at", datetime.now(UTC).isoformat())
+        self.samples.append(sample)
 
     def clear(self):
         self.samples.clear()
@@ -88,9 +94,7 @@ class MetricsService:
         values = [float(sample["position_error_mm"]) for sample in samples]
         ordered = sorted(values)
         median = (
-            (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) / 2
-            if ordered
-            else None
+            (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) / 2 if ordered else None
         )
         p95 = ordered[max(0, ceil(len(ordered) * 0.95) - 1)] if ordered else None
         return {
@@ -103,18 +107,20 @@ class MetricsService:
                 samples[-1].get("orientation_error_deg") if samples else None
             ),
             "last_target_age_ms": samples[-1].get("target_age_ms") if samples else None,
+            "last_recorded_at": samples[-1].get("recorded_at") if samples else None,
         }
 
     @staticmethod
     def _summary(values):
         ordered = sorted(values)
-        if len(ordered) < 2:
+        if not ordered:
             return {
-                "sample_count": len(ordered),
+                "sample_count": 0,
                 "mean_ms": None,
                 "median_ms": None,
                 "p95_ms": None,
-                "last_ms": ordered[-1] if ordered else None,
+                "last_ms": None,
+                "last_recorded_at": None,
             }
         p95 = ordered[max(0, ceil(len(ordered) * 0.95) - 1)]
         median = (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) / 2

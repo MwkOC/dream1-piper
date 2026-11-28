@@ -39,14 +39,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/base_link.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/base_link.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/base_link.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/base_link.stl" />
       </geometry>
     </collision>
   </link>
@@ -59,14 +59,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link1.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link1.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link1.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link1.stl" />
       </geometry>
     </collision>
   </link>
@@ -86,14 +86,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link2.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link2.stl" />
       </geometry>
       <material name="piper_gray" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link2.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link2.stl" />
       </geometry>
     </collision>
   </link>
@@ -113,14 +113,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link3.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link3.stl" />
       </geometry>
       <material name="piper_gray" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link3.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link3.stl" />
       </geometry>
     </collision>
   </link>
@@ -140,14 +140,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link4.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link4.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link4.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link4.stl" />
       </geometry>
     </collision>
   </link>
@@ -167,14 +167,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link5.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link5.stl" />
       </geometry>
       <material name="piper_graphite" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link5.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link5.stl" />
       </geometry>
     </collision>
   </link>
@@ -194,14 +194,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link6.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link6.stl" />
       </geometry>
       <material name="piper_silver" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link6.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link6.stl" />
       </geometry>
     </collision>
   </link>
@@ -221,14 +221,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/gripper_base.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_base.stl" />
       </geometry>
       <material name="piper_graphite" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/gripper_base.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_base.stl" />
       </geometry>
     </collision>
   </link>
@@ -246,14 +246,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link7.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link1.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link7.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link1.stl" />
       </geometry>
     </collision>
   </link>
@@ -273,14 +273,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link8.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link2.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link8.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link2.stl" />
       </geometry>
     </collision>
   </link>
@@ -318,14 +318,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/base_link.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/base_link.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/base_link.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/base_link.stl" />
       </geometry>
     </collision>
   </link>
@@ -338,14 +338,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link1.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link1.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link1.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link1.stl" />
       </geometry>
     </collision>
   </link>
@@ -365,14 +365,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link2.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link2.stl" />
       </geometry>
       <material name="piper_gray" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link2.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link2.stl" />
       </geometry>
     </collision>
   </link>
@@ -392,14 +392,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link3.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link3.stl" />
       </geometry>
       <material name="piper_gray" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link3.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link3.stl" />
       </geometry>
     </collision>
   </link>
@@ -419,14 +419,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link4.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link4.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link4.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link4.stl" />
       </geometry>
     </collision>
   </link>
@@ -446,14 +446,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link5.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link5.stl" />
       </geometry>
       <material name="piper_graphite" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link5.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link5.stl" />
       </geometry>
     </collision>
   </link>
@@ -473,14 +473,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link6.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link6.stl" />
       </geometry>
       <material name="piper_silver" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link6.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/link6.stl" />
       </geometry>
     </collision>
   </link>
@@ -500,14 +500,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/gripper_base.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_base.stl" />
       </geometry>
       <material name="piper_graphite" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/gripper_base.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_base.stl" />
       </geometry>
     </collision>
   </link>
@@ -525,14 +525,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link7.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link1.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link7.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link1.stl" />
       </geometry>
     </collision>
   </link>
@@ -552,14 +552,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link8.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link2.stl" />
       </geometry>
       <material name="piper_black" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://piper_description/meshes/link8.STL" />
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/agx_gripper/meshes/gripper_link2.stl" />
       </geometry>
     </collision>
   </link>

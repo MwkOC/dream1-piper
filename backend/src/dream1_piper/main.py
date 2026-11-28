@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import add_scalar_reference
 
 from dream1_piper.adapters.cameras import CameraInput
+from dream1_piper.adapters.memory import MemoryEventWriter, MemoryRepository, MemoryStore
 from dream1_piper.adapters.postgres.database import Database
 from dream1_piper.adapters.postgres.event_writer import EventWriter
 from dream1_piper.adapters.postgres.repository import StationRepository
@@ -63,13 +64,20 @@ def _consume_tracking_samples(app, result):
 
 
 async def _stop_after_ros_loss(app):
-    if app.state.station.state not in {RunState.ARMED, RunState.RUNNING}:
-        return
-    try:
-        await app.state.ros_gateway.command("stop", {"reason": "ROS feedback lost"})
-    except Exception:
-        pass
-    app.state.station.fault("ROS arm feedback lost")
+    async with app.state.control_lock:
+        if app.state.station.state not in {RunState.ARMED, RunState.RUNNING}:
+            return
+        try:
+            await app.state.ros_gateway.command(
+                "stop",
+                {
+                    "reason": "ROS feedback lost",
+                    "generation": app.state.station.control_generation + 1,
+                },
+            )
+        except Exception:
+            pass
+        app.state.station.fault("ROS arm feedback lost")
 
 
 def _install_static_frontend(app, dist_path):
@@ -133,13 +141,23 @@ def _initialize_resources(
     application, config, database, ros_gateway, cameras, event_writer, repository
 ):
     application.state.settings = config
-    application.state.database = database or Database(config.database_url.get_secret_value())
-    application.state.event_bus = EventBus()
-    application.state.metrics = MetricsService()
-    application.state.event_writer = event_writer or EventWriter(
-        application.state.database, config.metrics_queue_size
+    application.state.control_lock = asyncio.Lock()
+    application.state.storage_backend = config.storage_backend
+    application.state.storage_persistent = config.storage_backend == "postgres"
+    memory_store = None
+    if config.storage_backend == "memory":
+        memory_store = MemoryStore(config.memory_history_limit)
+        application.state.database = None
+    else:
+        application.state.database = database or Database(config.database_url.get_secret_value())
+    application.state.event_bus = EventBus(history_size=config.memory_history_limit)
+    application.state.metrics = MetricsService(config.memory_history_limit)
+    application.state.event_writer = event_writer or _event_writer(
+        config, application.state.database, memory_store
     )
-    application.state.repository = repository or StationRepository(application.state.database)
+    application.state.repository = repository or _repository(
+        config, application.state.database, memory_store
+    )
     application.state.auth = SessionAuth(
         config.ui_operator_token.get_secret_value() if config.ui_operator_token else None,
         config.session_secret.get_secret_value(),
@@ -148,6 +166,18 @@ def _initialize_resources(
     application.state.ros_gateway = ros_gateway or RosGateway(config.ros_bridge_url)
     _initialize_profile(application, config, cameras)
     _initialize_services(application, config)
+
+
+def _event_writer(config, database, memory_store):
+    if config.storage_backend == "memory":
+        return MemoryEventWriter(memory_store, config.metrics_queue_size)
+    return EventWriter(database, config.metrics_queue_size)
+
+
+def _repository(config, database, memory_store):
+    if config.storage_backend == "memory":
+        return MemoryRepository(memory_store)
+    return StationRepository(database)
 
 
 def _initialize_profile(application, config, camera_input=None):
@@ -211,7 +241,8 @@ async def _shutdown(application, probe):
     await asyncio.gather(probe, return_exceptions=True)
     application.state.cameras.close()
     await application.state.event_writer.close()
-    await application.state.database.close()
+    if application.state.database is not None:
+        await application.state.database.close()
 
 
 def _project_path(value):

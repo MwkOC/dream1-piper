@@ -1,4 +1,5 @@
 import os
+import socket
 from pathlib import Path
 
 import yaml
@@ -26,7 +27,19 @@ def _tcp_offset():
     return [float(value) for value in offset]
 
 
+def _ensure_single_station_bridge():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        try:
+            listener.bind(("127.0.0.1", 8766))
+        except OSError as exc:
+            raise RuntimeError(
+                "A Piper station bridge already owns 127.0.0.1:8766; "
+                "stop the existing station.launch.py before starting another."
+            ) from exc
+
+
 def generate_launch_description():
+    _ensure_single_station_bridge()
     package = get_package_share_directory("dream1_piper_ros")
     servo_config = str(Path(package) / "config/servo.yaml")
     description = Path(package) / "description"
@@ -46,6 +59,10 @@ def generate_launch_description():
                 "auto_enable": "false",
                 "auto_control_gate": "true",
                 "control_gate_service": f"/{side}/control_enable",
+                "follow": "true",
+                # Keep MoveIt's simulated ros2_control state output away from
+                # the physical driver's control/joint_states command input.
+                "control_topic": "moveit_mock/joint_states",
                 "use_rviz": "false",
                 "speed_percent": os.getenv("RSTACK_ROBOT_SPEED_PERCENT", "20"),
                 "tcp_offset": tcp_offset,
@@ -53,7 +70,7 @@ def generate_launch_description():
         ))
         actions.append(Node(
             package="moveit_servo",
-            executable="servo_node_main",
+            executable="servo_node",
             namespace=side,
             name="servo_node",
             parameters=[servo_config, {"robot_description": robot_description, "robot_description_semantic": robot_semantic, "moveit_servo": {
@@ -72,7 +89,7 @@ def generate_launch_description():
         parameters=[{
             "home_duration_s": float(os.getenv("RSTACK_HOME_DURATION_S", "3.0")),
             "home_tolerance_rad": float(os.getenv("RSTACK_HOME_TOLERANCE_RAD", "0.08")),
-            "pose_metrics_hz": float(os.getenv("RSTACK_POSE_METRICS_HZ", "2")),
+            "pose_metrics_hz": float(os.getenv("RSTACK_POSE_METRICS_HZ", "0.3333333333")),
             "pose_metrics_max_target_age_ms": float(
                 os.getenv("RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS", "250")
             ),

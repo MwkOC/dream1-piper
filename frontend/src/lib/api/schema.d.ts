@@ -378,6 +378,21 @@ export interface components {
             /** Confirmation */
             confirmation: string;
         };
+        /** Readiness */
+        Readiness: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "not_ready";
+            /** Database */
+            database: boolean | null;
+            /** Ros */
+            ros: boolean;
+            /** Cameras */
+            cameras: boolean;
+            storage: components["schemas"]["StorageReadiness"];
+        };
         /**
          * RunState
          * @enum {string}
@@ -416,6 +431,16 @@ export interface components {
             /** Last Fault */
             last_fault: string | null;
             teleop_limits: components["schemas"]["TeleopLimits"];
+        };
+        /** StorageReadiness */
+        StorageReadiness: {
+            /**
+             * Backend
+             * @enum {string}
+             */
+            backend: "postgres" | "memory";
+            /** Persistent */
+            persistent: boolean;
         };
         /** TaskCommand */
         TaskCommand: {
@@ -497,7 +522,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Readiness"];
                 };
             };
         };

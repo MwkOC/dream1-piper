@@ -54,7 +54,7 @@ class EventWriter:
 
     async def _store(self, event_type, data):
         item = SystemEvent(
-            event_id=uuid4(),
+            event_id=self._uuid(data.get("event_id")) or uuid4(),
             operation_id=self._uuid(data.get("operation_id")),
             control_source=data.get("control_source"),
             event_type=event_type,

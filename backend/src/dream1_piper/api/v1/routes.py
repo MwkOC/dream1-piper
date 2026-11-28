@@ -28,6 +28,11 @@ from dream1_piper.domain.contracts import (
 router = APIRouter(prefix="/api/v1")
 
 
+async def control_transaction(request: Request):
+    async with request.app.state.control_lock:
+        yield
+
+
 def _translate_error(exc):
     if isinstance(exc, PermissionError):
         raise HTTPException(status_code=401, detail=str(exc)) from exc
@@ -91,7 +96,7 @@ async def delete_session(request: Request, response: Response):
     return {"authenticated": False}
 
 
-@router.post("/validate", dependencies=[Depends(require_operator)])
+@router.post("/validate", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def validate(body: OperationCommand, request: Request, service=Depends(station)):
     try:
         hardware = await service.robot_gateway.status()
@@ -110,7 +115,7 @@ async def validate(body: OperationCommand, request: Request, service=Depends(sta
         _translate_error(exc)
 
 
-@router.post("/arm", dependencies=[Depends(require_operator)])
+@router.post("/arm", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def arm(body: ArmCommand, request: Request, service=Depends(station)):
     try:
         prior = service._idempotent(body.request_id)
@@ -121,7 +126,12 @@ async def arm(body: ArmCommand, request: Request, service=Depends(station)):
         request.app.state.worker_bridge.reset_action_reference()
         result = service.arm(body.request_id, body.control_source, body.selected_arm)
         await service.robot_gateway.command(
-            "arm", {"source": body.control_source, "arm": body.selected_arm}
+            "arm",
+            {
+                "source": body.control_source,
+                "arm": body.selected_arm,
+                "generation": service.control_generation,
+            },
         )
         return result
     except (ValueError, RuntimeError) as exc:
@@ -130,7 +140,7 @@ async def arm(body: ArmCommand, request: Request, service=Depends(station)):
         _translate_error(exc)
 
 
-@router.post("/start", dependencies=[Depends(require_operator)])
+@router.post("/start", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def start(body: OperationCommand, service=Depends(station)):
     try:
         prior = service._idempotent(body.request_id)
@@ -149,10 +159,14 @@ async def start(body: OperationCommand, service=Depends(station)):
         _translate_error(exc)
 
 
-@router.post("/pause", dependencies=[Depends(require_operator)])
+@router.post("/pause", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def pause(body: OperationCommand, service=Depends(station)):
     try:
-        await service.robot_gateway.command("stop", {"reason": "operator pause"})
+        state = service.state.value
+        generation = service.control_generation + int(state not in {"DISCONNECTED", "FAULT"})
+        await service.robot_gateway.command(
+            "stop", {"reason": "operator pause", "generation": generation}
+        )
         return service.pause(body.request_id)
     except ValueError as exc:
         _translate_error(exc)
@@ -161,7 +175,7 @@ async def pause(body: OperationCommand, service=Depends(station)):
         _translate_error(exc)
 
 
-@router.put("/task", dependencies=[Depends(require_operator)])
+@router.put("/task", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def set_task(body: TaskCommand, request: Request, service=Depends(station)):
     try:
         task = body.task
@@ -221,7 +235,14 @@ async def operation_detail(operation_id: UUID, request: Request):
     return result
 
 
-@router.delete("/history", dependencies=[Depends(require_operator)])
+@router.get("/events/history", dependencies=[Depends(require_operator)])
+async def list_event_history(request: Request, limit: int = 20, offset: int = 0):
+    if not 1 <= limit <= 100 or offset < 0:
+        raise HTTPException(status_code=422, detail="limit must be 1..100 and offset >= 0")
+    return await request.app.state.repository.list_events(limit, offset)
+
+
+@router.delete("/history", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def purge_history(body: PurgeCommand, request: Request, service=Depends(station)):
     if body.confirmation != "DELETE ALL DATA":
         raise HTTPException(status_code=422, detail='confirmation must be "DELETE ALL DATA"')
@@ -244,15 +265,20 @@ async def purge_history(body: PurgeCommand, request: Request, service=Depends(st
     return {"deleted": True}
 
 
-@router.post("/home", dependencies=[Depends(require_operator)])
+@router.post("/home", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def home(body: OperationCommand, request: Request, service=Depends(station)):
     try:
         if service.state.value not in {"READY", "PAUSED"} or not service.hardware_validated:
             raise ValueError("validate hardware and pause the station before Home")
-        await service.robot_gateway.command("stop", {"reason": "home requested"})
+        await service.robot_gateway.command(
+            "stop",
+            {"reason": "home requested", "generation": service.control_generation + 1},
+        )
         service.pause(body.request_id, "home requested")
         values = request.app.state.robot_profile["station"]["home_action"]
-        return await service.robot_gateway.command("home", {"values": values})
+        return await service.robot_gateway.command(
+            "home", {"values": values, "generation": service.control_generation}
+        )
     except ValueError as exc:
         _translate_error(exc)
     except (RuntimeError, TimeoutError) as exc:
@@ -260,11 +286,13 @@ async def home(body: OperationCommand, request: Request, service=Depends(station
         _translate_error(exc)
 
 
-@router.post("/fault/reset", dependencies=[Depends(require_operator)])
+@router.post("/fault/reset", dependencies=[Depends(require_operator), Depends(control_transaction)])
 async def reset_fault(body: OperationCommand, service=Depends(station)):
     if service.state.value != "FAULT":
         raise HTTPException(status_code=409, detail="station is not in FAULT")
-    await service.robot_gateway.command("stop", {"reason": "fault reset"})
+    await service.robot_gateway.command(
+        "stop", {"reason": "fault reset", "generation": service.control_generation}
+    )
     service.last_fault = None
     service.state = service.state.DISCONNECTED
     return {"request_id": str(body.request_id), "accepted": True, **service.snapshot()}
@@ -282,8 +310,16 @@ async def events(request: Request):
     async def stream():
         queue = request.app.state.event_bus.subscribe()
         try:
+            yield ": connected\n\n"
             while True:
-                item = await queue.get()
+                try:
+                    item = await asyncio.wait_for(
+                        queue.get(),
+                        timeout=request.app.state.settings.events_heartbeat_seconds,
+                    )
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
                 yield f"id: {item['event_id']}\nevent: {item['type']}\ndata: {json.dumps(item)}\n\n"
         finally:
             request.app.state.event_bus.unsubscribe(queue)
@@ -317,8 +353,9 @@ async def worker(socket: WebSocket):
         await socket.close(code=4401)
         return
     await socket.accept()
-    socket.app.state.station.worker_connected = True
-    pusher = asyncio.create_task(_push_worker_observations(socket))
+    socket.app.state.worker_socket = socket
+    socket.app.state.station.worker_connected = False
+    pusher = None
     try:
         await socket.send_json(
             {
@@ -327,13 +364,15 @@ async def worker(socket: WebSocket):
                 "read_only": socket.app.state.settings.dream_mode == "observe",
             }
         )
-        socket.app.state.worker_socket = socket
         while True:
             message = await socket.receive_json()
             if message.get("type") == "observation_request":
                 response = await _worker_observation(socket.app)
             else:
                 response = await socket.app.state.worker_bridge.handle(message)
+                if message.get("type") == "hello" and response and response.get("accepted"):
+                    socket.app.state.station.worker_connected = True
+                    pusher = asyncio.create_task(_push_worker_observations(socket))
             if response is not None:
                 await socket.send_json(response)
     except WebSocketDisconnect:
@@ -341,23 +380,30 @@ async def worker(socket: WebSocket):
     except Exception as exc:
         await socket.close(code=1011, reason=str(exc)[:120])
     finally:
-        pusher.cancel()
-        await asyncio.gather(pusher, return_exceptions=True)
-        await _worker_disconnected(socket.app)
+        if pusher is not None:
+            pusher.cancel()
+            await asyncio.gather(pusher, return_exceptions=True)
+        await _worker_disconnected(socket.app, socket)
 
 
-async def _worker_disconnected(app):
-    app.state.station.worker_connected = False
-    app.state.worker_socket = None
-    active = app.state.station
-    if active.state.value != "RUNNING" or active.control_source.value != "dream":
+async def _worker_disconnected(app, socket):
+    if getattr(app.state, "worker_socket", None) is not socket:
         return
-    try:
-        await active.robot_gateway.command("stop", {"reason": "worker disconnected"})
-    except Exception as exc:
-        active.fault(f"worker disconnected; ROS stop failed: {exc}")
-        return
-    active.pause(uuid4(), "worker disconnected")
+    async with app.state.control_lock:
+        app.state.station.worker_connected = False
+        app.state.worker_socket = None
+        active = app.state.station
+        if active.state.value != "RUNNING" or active.control_source.value != "dream":
+            return
+        try:
+            await active.robot_gateway.command(
+                "stop",
+                {"reason": "worker disconnected", "generation": active.control_generation + 1},
+            )
+        except Exception as exc:
+            active.fault(f"worker disconnected; ROS stop failed: {exc}")
+            return
+        active.pause(uuid4(), "worker disconnected")
 
 
 async def _worker_observation(app):
@@ -423,13 +469,18 @@ async def _push_worker_observations(socket):
                     last_trace_at = now
             except Exception as exc:
                 await socket.send_json({"type": "error", "reason": str(exc)})
-                try:
-                    await app.state.ros_gateway.command(
-                        "stop", {"reason": "worker observation failed"}
-                    )
-                except Exception:
-                    pass
-                station_state.fault(f"worker observation failed: {exc}")
+                async with app.state.control_lock:
+                    try:
+                        await app.state.ros_gateway.command(
+                            "stop",
+                            {
+                                "reason": "worker observation failed",
+                                "generation": station_state.control_generation + 1,
+                            },
+                        )
+                    except Exception:
+                        pass
+                    station_state.fault(f"worker observation failed: {exc}")
                 return
         else:
             control = (station_state.state.value.lower(), station_state.control_generation)

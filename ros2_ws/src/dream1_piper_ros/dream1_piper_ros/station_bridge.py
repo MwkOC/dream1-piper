@@ -1,6 +1,5 @@
 import asyncio
 import json
-import math
 import os
 import threading
 import time
@@ -14,25 +13,18 @@ from sensor_msgs.msg import JointState
 from std_srvs.srv import SetBool
 from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory
-from websockets.asyncio.server import serve
+try:
+    from websockets.asyncio.server import serve
+except ImportError:  # ROS Jazzy's Ubuntu package may still provide websockets 10.x.
+    from websockets import serve
+from dream1_piper_ros.tracking_metrics import (
+    match_feedback_target,
+    orientation_error_deg,
+    position_error_mm,
+)
 
 
 SIDES = ("left", "right")
-
-
-def _position_error_mm(target, measured):
-    return sum((float(a) - float(b)) ** 2 for a, b in zip(target, measured, strict=True)) ** 0.5 * 1000
-
-
-def _orientation_error_deg(target, measured):
-    left = [float(value) for value in target]
-    right = [float(value) for value in measured]
-    left_norm = sum(value * value for value in left) ** 0.5
-    right_norm = sum(value * value for value in right) ** 0.5
-    if left_norm == 0 or right_norm == 0:
-        raise ValueError("feedback orientation quaternion must be non-zero")
-    dot = abs(sum(a * b for a, b in zip(left, right, strict=True)) / (left_norm * right_norm))
-    return 2 * math.acos(min(1.0, dot)) * 180 / math.pi
 
 
 class StationBridge(Node):
@@ -40,19 +32,29 @@ class StationBridge(Node):
         super().__init__("dream1_piper_station_bridge")
         self.declare_parameter("home_duration_s", 3.0)
         self.declare_parameter("home_tolerance_rad", 0.08)
-        self.declare_parameter("pose_metrics_hz", float(os.getenv("RSTACK_POSE_METRICS_HZ", "2")))
-        self.declare_parameter("pose_metrics_max_target_age_ms", float(os.getenv("RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS", "250")))
+        self.declare_parameter(
+            "pose_metrics_hz", float(os.getenv("RSTACK_POSE_METRICS_HZ", "0.3333333333"))
+        )
+        self.declare_parameter(
+            "pose_metrics_max_target_age_ms",
+            float(os.getenv("RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS", "250")),
+        )
         self.home_duration_s = float(self.get_parameter("home_duration_s").value)
         self.home_tolerance_rad = float(self.get_parameter("home_tolerance_rad").value)
         self.pose_metrics_hz = float(self.get_parameter("pose_metrics_hz").value)
-        self.pose_metrics_max_target_age_s = float(self.get_parameter("pose_metrics_max_target_age_ms").value) / 1000
+        self.pose_metrics_max_target_age_s = (
+            float(self.get_parameter("pose_metrics_max_target_age_ms").value) / 1000
+        )
         if self.pose_metrics_hz <= 0 or self.pose_metrics_max_target_age_s <= 0:
             raise ValueError("pose metric rate and target age must be positive")
+        tracking_history_limit = int(os.getenv("RSTACK_MEMORY_HISTORY_LIMIT", "100000"))
+        if not 1 <= tracking_history_limit <= 100000:
+            raise ValueError("RSTACK_MEMORY_HISTORY_LIMIT must be between 1 and 100000")
         self.lock = threading.RLock()
         self.arms = {side: {"stamp": 0.0, "joints": [], "gripper": 0.0, "tcp": None, "tcp_stamp": 0.0} for side in SIDES}
-        self.tracking_targets = {side: None for side in SIDES}
+        self.tracking_targets = {side: deque(maxlen=128) for side in SIDES}
         self.last_pose_metric_at = {side: 0.0 for side in SIDES}
-        self.tracking_samples = deque(maxlen=256)
+        self.tracking_samples = deque(maxlen=tracking_history_limit)
         self.source = None
         self.selected_arm = None
         self.generation = 0
@@ -61,7 +63,7 @@ class StationBridge(Node):
         self.twist_pubs = {}
         self.gate_clients = {}
         self.enable_clients = {}
-        self.subscriptions = []
+        self.arm_subscriptions = []
         for side in SIDES:
             self._create_arm_io(side)
         self.joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -74,9 +76,9 @@ class StationBridge(Node):
         self.twist_pubs[side] = self.create_publisher(TwistStamped, f"{root}/servo_node/delta_twist_cmds", 5)
         self.gate_clients[side] = self.create_client(SetBool, f"{root}/control_enable")
         self.enable_clients[side] = self.create_client(SetBool, f"{root}/enable_agx_arm")
-        self.subscriptions.append(self.create_subscription(JointState, f"{root}/feedback/joint_states", lambda msg, arm=side: self._joint_feedback(arm, msg), 20))
-        self.subscriptions.append(self.create_subscription(PoseStamped, f"{root}/feedback/tcp_pose", lambda msg, arm=side: self._tcp_feedback(arm, msg), 10))
-        self.subscriptions.append(self.create_subscription(JointTrajectory, f"{root}/servo_node/command", lambda msg, arm=side: self._servo_command(arm, msg), 10))
+        self.arm_subscriptions.append(self.create_subscription(JointState, f"{root}/feedback/joint_states", lambda msg, arm=side: self._joint_feedback(arm, msg), 20))
+        self.arm_subscriptions.append(self.create_subscription(PoseStamped, f"{root}/feedback/tcp_pose", lambda msg, arm=side: self._tcp_feedback(arm, msg), 10))
+        self.arm_subscriptions.append(self.create_subscription(JointTrajectory, f"{root}/servo_node/command", lambda msg, arm=side: self._servo_command(arm, msg), 10))
 
     def _joint_feedback(self, side, message):
         with self.lock:
@@ -98,7 +100,8 @@ class StationBridge(Node):
         with self.lock:
             self.arms[side]["tcp"] = {**measured, "frame_id": frame_id}
             self.arms[side]["tcp_stamp"] = received_at
-            target = self.tracking_targets[side]
+            feedback_stamp = float(message.header.stamp.sec) + message.header.stamp.nanosec / 1e9
+            target = self._match_tracking_target(side, feedback_stamp, received_at)
             if target:
                 sample = self._tracking_sample(side, target, measured, frame_id, received_at, message)
                 if sample:
@@ -106,12 +109,26 @@ class StationBridge(Node):
         if sample:
             self.tracking_pub.publish(String(data=json.dumps(sample)))
 
+    def _match_tracking_target(self, side, feedback_stamp, received_at):
+        # Match by the driver's measurement time, not callback arrival order.
+        return match_feedback_target(
+            self.tracking_targets[side],
+            feedback_stamp,
+            received_at,
+            self.pose_metrics_max_target_age_s,
+        )
+
     def _tracking_sample(self, side, target, measured, frame_id, received_at, message):
         target_pose = target.get("pose")
         if not isinstance(target_pose, dict):
             return None
         age_s = received_at - target["issued_at"]
-        if age_s < 0 or age_s > self.pose_metrics_max_target_age_s:
+        feedback_age_s = (
+            float(message.header.stamp.sec)
+            + message.header.stamp.nanosec / 1e9
+            - target["issued_stamp_sec"]
+        )
+        if age_s < 0 or age_s > self.pose_metrics_max_target_age_s or feedback_age_s < 0:
             return None
         if received_at - self.last_pose_metric_at[side] < 1 / self.pose_metrics_hz:
             return None
@@ -122,14 +139,18 @@ class StationBridge(Node):
                 "result": "unavailable", "reason": "frame_mismatch",
                 "target_frame_id": target_pose.get("frame_id"), "feedback_frame_id": frame_id,
             }
-        position_error = _position_error_mm(target_pose["position"], measured["position"])
-        orientation_error = _orientation_error_deg(target_pose["orientation"], measured["orientation"])
+        position_error = position_error_mm(target_pose["position"], measured["position"])
+        orientation_error = orientation_error_deg(
+            target_pose["orientation"], measured["orientation"]
+        )
         stamp = message.header.stamp
         return {
             **target["context"], "stage": "tcp_tracking_error", "arm": side, "result": "measured",
             "position_error_mm": position_error, "orientation_error_deg": orientation_error,
             "target": target_pose, "measured": {**measured, "frame_id": frame_id},
-            "target_age_ms": age_s * 1000,
+            "target_age_ms": feedback_age_s * 1000,
+            "feedback_arrival_age_ms": age_s * 1000,
+            "target_stamp_sec": target["issued_stamp_sec"],
             "feedback_stamp_sec": float(stamp.sec) + float(stamp.nanosec) / 1e9,
         }
 
@@ -160,7 +181,7 @@ class StationBridge(Node):
             self.get_logger().info("ROS station gateway listening on 127.0.0.1:8766")
             await asyncio.Future()
 
-    async def _handle(self, socket):
+    async def _handle(self, socket, _path=None):
         async for raw in socket:
             try:
                 request = json.loads(raw)
@@ -179,7 +200,7 @@ class StationBridge(Node):
         if kind == "start":
             return await self._start(payload)
         if kind == "stop":
-            return await self._stop()
+            return await self._stop(payload)
         if kind == "teleop":
             return self._teleop(payload)
         if kind == "dream_action":
@@ -214,12 +235,16 @@ class StationBridge(Node):
                 raise RuntimeError(f"failed to enable {side} Piper")
         with self.lock:
             self.source, self.selected_arm = source, selected
-            self.generation += 1
+            self.generation = int(payload.get("generation", self.generation + 1))
         return {"accepted": True}
 
     async def _start(self, payload):
-        if int(payload["generation"]) != self.generation:
-            raise RuntimeError("stale station control generation")
+        requested_generation = int(payload["generation"])
+        if requested_generation != self.generation:
+            raise RuntimeError(
+                "stale station control generation "
+                f"(station={requested_generation}, ros={self.generation})"
+            )
         sides = SIDES if self.source == "dream" else (self.selected_arm,)
         for side in sides:
             if not await asyncio.to_thread(self._call_bool, self.gate_clients[side], True):
@@ -228,14 +253,15 @@ class StationBridge(Node):
             self.gates_open.update(sides)
         return {"accepted": True}
 
-    async def _stop(self):
+    async def _stop(self, payload=None):
+        payload = payload or {}
         closed = []
         for side in SIDES:
             self._publish_twist_zero(side)
             closed.append(await asyncio.to_thread(self._call_bool, self.gate_clients[side], False))
         with self.lock:
             self.gates_open.clear()
-            self.generation += 1
+            self.generation = int(payload.get("generation", self.generation + 1))
         if not all(closed):
             raise RuntimeError("one or more ROS control gates did not close")
         return {"accepted": True}
@@ -263,21 +289,36 @@ class StationBridge(Node):
                 raise RuntimeError("Dream source is not active")
         for side, start in (("left", 0), ("right", 7)):
             target_pose = (payload.get("tcp_targets") or {}).get(side)
+            issued_at = time.monotonic()
+            command_stamp = self.get_clock().now().to_msg()
+            issued_stamp_sec = float(command_stamp.sec) + command_stamp.nanosec / 1e9
             with self.lock:
-                self.tracking_targets[side] = {
-                    "pose": target_pose,
-                    "issued_at": time.monotonic(),
-                    "context": {
-                        "control_source": "dream", "operation_id": payload.get("operation_id"),
-                        "session_id": payload.get("session_id"), "sequence": payload.get("sequence_id"),
-                        "invocation_id": payload.get("invocation_id"),
-                    },
-                } if isinstance(target_pose, dict) else None
-            self._publish_joint_state(side, [*(f"joint{index}" for index in range(1, 7)), "gripper"], [*values[start:start + 6], max(0.0, min(1.0, values[start + 6])) * 0.1])
+                if isinstance(target_pose, dict):
+                    self.tracking_targets[side].append(
+                        {
+                            "pose": target_pose,
+                            "issued_at": issued_at,
+                            "issued_stamp_sec": issued_stamp_sec,
+                            "context": {
+                                "control_source": "dream",
+                                "operation_id": payload.get("operation_id"),
+                                "session_id": payload.get("session_id"),
+                                "sequence": payload.get("sequence_id"),
+                                "invocation_id": payload.get("invocation_id"),
+                            },
+                        }
+                    )
+            self._publish_joint_state(
+                side,
+                [*(f"joint{index}" for index in range(1, 7)), "gripper"],
+                [*values[start:start + 6], max(0.0, min(1.0, values[start + 6])) * 0.1],
+                stamp=command_stamp,
+            )
         return {"accepted": True}
 
     async def _home(self, payload):
         values = payload["values"]
+        generation = int(payload.get("generation", self.generation))
         if len(values) != 14:
             raise ValueError("Home target must contain fourteen joint/gripper values")
         enabled = []
@@ -286,17 +327,17 @@ class StationBridge(Node):
             gate_open = await asyncio.to_thread(self._call_bool, self.gate_clients[side], True)
             enabled.append(motor_enabled and gate_open)
         if not all(enabled):
-            await self._stop()
+            await self._stop({"generation": generation})
             raise RuntimeError("could not enable both arms and open both gates for Home")
         with self.lock:
             self.gates_open.update(SIDES)
             self.source = "dream"
-            self.generation += 1
+            self.generation = generation
         try:
             self._dream_action({"values": values, "generation": self.generation})
             reached = await self._wait_home_target(values)
         finally:
-            await self._stop()
+            await self._stop({"generation": generation})
         if not reached:
             raise TimeoutError(f"Home target was not reached within {self.home_duration_s:.1f}s")
         return {"accepted": True, "status": "home target reached"}
@@ -318,11 +359,11 @@ class StationBridge(Node):
             await asyncio.sleep(0.05)
         return False
 
-    def _publish_joint_state(self, side, names, values):
+    def _publish_joint_state(self, side, names, values, *, stamp=None):
         if len(names) != len(values):
             raise ValueError("joint target names and values differ in length")
         message = JointState()
-        message.header.stamp = self.get_clock().now().to_msg()
+        message.header.stamp = stamp or self.get_clock().now().to_msg()
         message.name, message.position = names, values
         self.joint_pubs[side].publish(message)
 

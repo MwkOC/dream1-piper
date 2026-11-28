@@ -29,7 +29,7 @@ El estado de implementación del repo es:
 | API | FastAPI, OpenAPI y Scalar en `/api-docs` | Endpoints cubiertos parcialmente con tests unitarios, no desde hardware |
 | ROS 2 Jazzy | Driver AgileX, dos instancias MoveIt Servo y `station_bridge` definidos en `ros2_ws` | `colcon build` del workspace validado; no se ha ejecutado movimiento físico desde la aplicación |
 | Control desde UI | Selector Dream/teleop, cámara, tarea, validación, Arm/Start/Pause/Home y jog con deadman | Teleop requiere bridge ROS y feedback real; Dream requiere credenciales válidas |
-| Métricas | Eventos y latencias en memoria + cola asíncrona a PostgreSQL; modelos/migración Alembic | Persistencia requiere Compose/Postgres; no se ha verificado Docker local |
+| Métricas | Eventos y latencias en memoria o persistidas con cola asíncrona a PostgreSQL | PostgreSQL es opcional en desarrollo; memoria se pierde al reiniciar station |
 | Servicios | Contenedores `station` y `worker`; PostgreSQL es infraestructura. ROS launch vive en host Jazzy | No ejecutar perfil legado `piper_sdk` a la vez que los nodos ROS en los mismos CAN |
 
 La arquitectura de referencia recuperada está versionada en
@@ -40,8 +40,8 @@ acciones EEF, límites y registro; no contiene la presentación de teleoperació
 ## Arquitectura objetivo
 
 Se mantienen dos servicios de aplicación desplegables: estación y worker. La
-persistencia añade PostgreSQL como servicio de infraestructura de Docker Compose
-(tres contenedores en total), no como un tercer backend de aplicación. FastAPI,
+persistencia puede añadir PostgreSQL como servicio de infraestructura de Docker
+Compose, no como un tercer backend de aplicación. FastAPI,
 el build web, supervisión de movimiento, adquisición de cámaras, métricas y
 nodos ROS 2 son módulos del servicio de estación.
 
@@ -143,7 +143,14 @@ worker, pero no corta torque ni desconecta CAN. Los valores exportados por el
 proceso prevalecen sobre `.env`, y `.env` sobre YAML. El perfil configura left →
 `can0`, right → `can1`, cámaras `left/top/right` en `/dev/v4l/by-path`, 640×360,
 30 FPS; la estación produce observaciones a 20 Hz y exige skew de cámara máximo
-60 ms con espera de sincronización de hasta 100 ms.
+60 ms con espera de sincronización de hasta 100 ms. El orden de cámaras sigue
+`Robotics_train_stack/configs/robots/piper_bimanual_dream1.yaml`: USB-1 → `left`
+(muñeca izquierda, MJPG 640×480), USB-3 → `top` (ZED estéreo, YUYV 1344×376,
+recorte del ojo izquierdo), USB-2 → `right` (muñeca derecha, MJPG 640×480).
+La UI muestra esos nombres como Muñeca izquierda, Cenital y Muñeca derecha.
+Home usa esa misma postura baja de referencia; su altura TCP nominal por FK es
+~0,125 m frente a ~0,470 m de la postura anterior. Confirmar despeje del área
+antes de ejecutar Home con los brazos físicos.
 
 Rutas reales de la consola temporal (no son las rutas objetivo `/api/v1`):
 
@@ -167,30 +174,37 @@ de resetear y volver a validar.
 
 El workspace de ROS está implementado en `ros2_ws/`. `station.launch.py` crea
 dos instancias del driver `agx_arm_ctrl` bajo namespaces `left` y `right`, un
-nodo `moveit_servo/servo_node_main` por brazo y el nodo propio
-`dream1_piper_ros/station_bridge`. Este último combina feedback, convierte
+nodo `moveit_servo/servo_node` por brazo y el nodo propio
+`dream1_piper_ros/station_bridge`. El driver físico usa `pyAgxArm` y CAN;
+`ros2_control` también crea un `GenericSystem` ficticio para la integración de
+MoveIt, así que su presencia en los logs no confirma conexión física. El bridge combina feedback, convierte
 velocidades teleop a `TwistStamped`, permite acciones Dream cuando los gates
 están abiertos y ofrece el endpoint loopback que consume la API. Las rutas CAN
 y `speed_percent` llegan como variables de entorno del launch; URDF/SRDF y
-parámetros Servo permanecen en archivos de configuración.
+parámetros Servo permanecen en archivos de configuración. El tópico de estado
+de ese `GenericSystem` se mantiene separado de `control/joint_states`, que es
+el tópico de comandos del driver físico.
 
-Antes de usar ROS, detén cualquier perfil legado `piper_sdk` que abra los mismos
-CAN. No ejecutar `ResetPiper` automáticamente. La configuración existe, pero en
-este entorno no se validó `colcon build` ni movimiento físico; realiza preflight
-y prueba de dirección/alcance con baja velocidad antes de usar Dream.
+Antes de usar ROS, instala `pyAgxArm` para el Python de sistema 3.12 y detén
+cualquier perfil legado `piper_sdk` que abra los mismos CAN. No ejecutar
+`ResetPiper` automáticamente. Los nodos instalados del driver usan
+`/usr/bin/python3`; un Conda activo puede hacer que scripts con
+`/usr/bin/env python3` intenten cargar bindings ROS 3.12 con Python 3.13. Lanza
+ROS con `/usr/bin` primero en `PATH`, y confirma `python3 --version` como 3.12.
 
 ### Docker Compose y variables de entorno
 
-`compose.yaml` crea tres contenedores: `postgres`, `station` y `worker`. Los
-servicios de aplicación son `station` y `worker`; ROS 2 Jazzy se instala y
+`compose.yaml` define `station` y `worker`; PostgreSQL es opcional y se activa
+con el perfil Compose `database`. En el modo temporal `memory` sólo corren los
+dos servicios de aplicación y no se descarga la imagen de Postgres. ROS 2 Jazzy se instala y
 ejecuta en el host Ubuntu para que DDS, CAN y los controladores Piper no queden
 dentro de una imagen Python que no incluye ROS. La estación se conecta al nodo
 `station_bridge` del host por `127.0.0.1:8766`. Compose asigna dispositivos V4L
 sólo al contenedor `station`; `worker` no recibe acceso a CAN ni cámaras. Los
 servicios station/worker usan `network_mode: host` porque el bridge ROS escucha
 en loopback y worker usa WebSocket al loopback de station. En el perfil local
-la UI usa HTTP sólo en `127.0.0.1`, sin TLS; PostgreSQL permanece aislado
-en bridge y publica su puerto sólo en `127.0.0.1`. No se usa `privileged`; el
+la UI usa HTTP sólo en `127.0.0.1`, sin TLS; cuando se activa, PostgreSQL
+permanece aislado en bridge y publica su puerto sólo en `127.0.0.1`. No se usa `privileged`; el
 firewall del host debe limitar el puerto UI a la LAN de operación.
 
 YAML conserva el perfil de hardware en `configs/app_robot.yaml` y la
@@ -199,7 +213,7 @@ Esos archivos son la fuente de configuración funcional (límites, buses, cámar
 frecuencias y modelo/tarea por defecto). `.env` contiene la clave DreamLabs y
 overrides específicos del host; para desarrollo local admite tokens dummy y no
 requiere certificados. Compose lee `.env` para interpolar dispositivos,
-PostgreSQL y puertos, y lo inyecta en `station` y `worker` con `env_file: .env`.
+PostgreSQL (si se activa) y puertos, y lo inyecta en `station` y `worker` con `env_file: .env`.
 Los overrides de dispositivos del contenedor se aplican en Compose; la API y el
 worker aplican sus variables `RSTACK_*` por encima del YAML al iniciar. Así el
 YAML sigue siendo editable y portable, mientras `.env` adapta la misma
@@ -212,62 +226,101 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Para funcionamiento local usa el perfil de `.env.example`: `RSTACK_ENVIRONMENT=development`,
-bind a `127.0.0.1`, tokens dummy y DSN PostgreSQL local. Conserva una clave real
-en `DREAM_API_KEY`. Alinea `POSTGRES_PASSWORD` y `DATABASE_URL`, y configura
-`CAMERA_*_HOST` con los enlaces `/dev/v4l/by-path` del host. `DATABASE_URL` usa
-`127.0.0.1` porque station comparte la red del host. No se requieren valores
-TLS en el perfil local.
+Para funcionamiento local elige `RSTACK_STORAGE_BACKEND=memory` en `.env` si
+PostgreSQL aún no está instalado/disponible. Usa tokens dummy, conserva una clave
+real en `DREAM_API_KEY` y configura `CAMERA_*_HOST` con los enlaces
+`/dev/v4l/by-path` del host. No se requieren credenciales de Postgres ni valores
+TLS en este modo; tareas e historial se pierden al reiniciar `station`.
+
+Con `RSTACK_STORAGE_BACKEND=postgres`, conserva el DSN local en `DATABASE_URL`,
+alinea `POSTGRES_PASSWORD` y arranca el perfil `database`. `DATABASE_URL` usa
+`127.0.0.1` porque station comparte la red del host.
 
 Para desplegar en LAN, usa `compose.production.yaml`, tokens fuertes y TLS:
 certificado con SAN para la IP/nombre del host y `127.0.0.1`; `TLS_CA_HOST` debe
 apuntar a la CA que firma el certificado del servidor.
 
-Primero compila e inicia ROS 2 Jazzy en el host:
+Si `pyAgxArm` no está instalado para Python 3.12, instálalo antes de lanzar
+(el repositorio AgileX documenta este SDK por separado):
 
 ```bash
+sudo apt install -y python3-pip
+tmpdir="$(mktemp -d)"
+git clone --depth 1 https://github.com/agilexrobotics/pyAgxArm.git "$tmpdir/pyAgxArm"
+/usr/bin/python3 -m pip install --user --break-system-packages "$tmpdir/pyAgxArm"
+rm -rf "$tmpdir"
+```
+
+No uses `pip` sin `/usr/bin/python3`: el `pip` de Conda instala el SDK en
+Python 3.13, que los nodos del driver no cargan. El bridge admite tanto
+`websockets` 10.x (paquete de Ubuntu/Jazzy) como las versiones recientes.
+
+Primero compila e inicia ROS 2 Jazzy en el host:
+
+Mantén una sola instancia de `station.launch.py`: el launch verifica que
+`127.0.0.1:8766` esté libre antes de crear los drivers, y rechaza un segundo
+arranque para evitar duplicar nodos y gateways.
+
+```bash
+cd ~/NONHUMAN/dream1-piper
+conda deactivate 2>/dev/null || true
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+unset PYTHONHOME PYTHONPATH
+python3 --version  # debe mostrar Python 3.12.x
 set -a
 . ./.env
 set +a
 source /opt/ros/jazzy/setup.bash
 cd ros2_ws
-vcs import src < src/agilex.repos
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
+source install/setup.bash
+cd ..
+python3 -c 'import pyAgxArm; print("pyAgxArm:", pyAgxArm.__file__)'
+cd ros2_ws
+colcon build --symlink-install --packages-select dream1_piper_ros
 source install/setup.bash
 ros2 launch dream1_piper_ros station.launch.py
 ```
 
 Detén antes cualquier proceso legado que abra `can0`/`can1` con `piper_sdk`.
-En otra terminal, desde la raíz del repo, construye y levanta la aplicación:
+En modo temporal sin PostgreSQL, agrega o actualiza
+`RSTACK_STORAGE_BACKEND=memory` en `.env` (si el archivo se creó antes de esta
+opción, la variable todavía no existe). Desde la raíz del repo:
 
 ```bash
-sudo docker compose --env-file .env up -d --build
+if grep -q '^RSTACK_STORAGE_BACKEND=' .env; then
+  sed -i 's/^RSTACK_STORAGE_BACKEND=.*/RSTACK_STORAGE_BACKEND=memory/' .env
+else
+  printf '\nRSTACK_STORAGE_BACKEND=memory\n' >> .env
+fi
+sudo docker compose --env-file .env up -d --build station worker
 docker compose ps
 docker compose logs -f station worker
 ```
 
-El entrypoint de `station` corre `alembic upgrade head` antes de FastAPI. En
-local abre `http://127.0.0.1:${RSTACK_UI_PORT}`; PostgreSQL publica sólo a
-`127.0.0.1`. El worker espera el healthcheck y conecta por WS a `127.0.0.1`.
-Para LAN, agrega `-f compose.production.yaml` a los comandos de Compose; ese
-perfil usa HTTPS/WSS y requiere TLS. El modo worker predeterminado es `action`; cambia
+En modo PostgreSQL establece `RSTACK_STORAGE_BACKEND=postgres` y levanta
+`sudo docker compose --env-file .env --profile database up -d --build postgres station worker`.
+El entrypoint espera PostgreSQL y aplica `alembic upgrade head` antes de FastAPI;
+en memoria omite conexión y migraciones. En local abre
+`http://127.0.0.1:${RSTACK_UI_PORT}`. El worker espera el healthcheck y conecta por WS a `127.0.0.1`.
+Para LAN, agrega `-f compose.production.yaml --profile database` a los comandos
+de Compose; ese perfil usa HTTPS/WSS y requiere TLS. El modo worker predeterminado es `action`; cambia
 `RSTACK_DREAM_MODE=observe` en `.env` para observar sin ejecutar objetivos.
 Ambos modos mantienen el procedimiento `Validate → Arm → Start`. Scalar queda
 en `/api-docs`; OpenAPI nativo de FastAPI, en `/openapi.json`.
 
-Para parar limpiamente y conservar datos: `docker compose down`. No uses `-v`
-salvo que se quiera borrar PostgreSQL. La cámara, ROS y estado físico se
+Para parar limpiamente usa `docker compose down`. El modo memoria pierde todo
+el estado al parar/recrear `station`; Postgres conserva datos en su volumen.
+No uses `-v` salvo que se quiera borrar PostgreSQL. La cámara, ROS y estado físico se
 verifican en `/readyz` y en la UI; un build de contenedores no valida movimiento
-real. Compose espera que PostgreSQL esté healthy antes de estación y que la
-estación esté healthy antes del worker.
+real. Compose espera que la estación esté healthy antes del worker; el entrypoint
+espera Postgres sólo en el modo persistente.
 
 Comandos de operación:
 
 ```bash
-docker compose config -q
+docker compose --env-file .env config -q
 docker compose build station worker
-docker compose up -d postgres station worker
+docker compose --env-file .env --profile database up -d postgres station worker
 docker compose ps
 docker compose logs -f station worker
 ```
@@ -319,8 +372,12 @@ se duplican en TypeScript.
 | `RSTACK_UI_OPERATOR_TOKEN` | Token obligatorio para comandos de control y teleoperación en el perfil LAN; secreto sólo en `.env`/secret store. |
 | `RSTACK_UI_TLS_CERT` / `RSTACK_UI_TLS_KEY` | Certificado y clave para HTTPS/WSS desde la LAN; rutas locales con permisos restringidos. |
 
-| `DATABASE_URL` | DSN PostgreSQL para la estación; en Compose usa `127.0.0.1:${POSTGRES_PORT}` por red host. |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credenciales de inicialización PostgreSQL; sólo `.env` local o secret store. |
+| `RSTACK_STORAGE_BACKEND` | `postgres` por defecto; `memory` evita conexión/migraciones y conserva tareas e historial sólo hasta reiniciar station. No permitido en production. |
+| `RSTACK_MEMORY_HISTORY_LIMIT` | `100000`; máximo configurable (tope 100000) de muestras por colección de memoria, EventBus y acumulador de métricas; al llenarse, descarta las más antiguas. |
+| `RSTACK_METRICS_QUEUE_SIZE` | `10000`; capacidad de la cola asíncrona de escritura, separada del límite de retención de 100000 muestras. |
+| `RSTACK_EVENTS_HEARTBEAT_SECONDS` | `15`; intervalo de keepalive SSE para mantener visible la conexión de actividad cuando no hay eventos. |
+| `DATABASE_URL` | DSN PostgreSQL para la estación; sólo se usa con backend `postgres`; en Compose usa `127.0.0.1:${POSTGRES_PORT}` por red host. |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credenciales de inicialización PostgreSQL; sólo se requieren para activar el perfil `database`. |
 | `POSTGRES_PORT`, `POSTGRES_IMAGE` | Puerto de host sólo en `127.0.0.1`; imagen con major compatible y digest probado en release. |
 | `CAMERA_LEFT_HOST`, `CAMERA_TOP_HOST`, `CAMERA_RIGHT_HOST` | Rutas persistentes del host mapeadas a los dispositivos del contenedor estación. |
 | `RSTACK_CAMERA_LEFT_DEVICE`, `RSTACK_CAMERA_TOP_DEVICE`, `RSTACK_CAMERA_RIGHT_DEVICE` | Rutas internas de cámara dentro del contenedor estación. |
@@ -330,7 +387,7 @@ se duplican en TypeScript.
 | `RSTACK_CAN_LEFT`, `RSTACK_CAN_RIGHT` | Interfaces CAN; el launch ROS admite estos overrides. |
 | `RSTACK_ROBOT_SPEED_PERCENT` | Velocidad inicial del driver ROS, configurable en `.env`. |
 | `RSTACK_HOME_DURATION_S`, `RSTACK_HOME_TOLERANCE_RAD` | Tiempo y tolerancia de llegada para Home supervisado por feedback. |
-| `RSTACK_POSE_METRICS_HZ`, `RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS` | Frecuencia máxima por brazo y antigüedad límite para el error TCP; el launch ROS las lee desde el `.env` exportado. |
+| `RSTACK_POSE_METRICS_HZ`, `RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS` | Frecuencia máxima por brazo (default 1/3 Hz, cada 3 s) y ventana temporal máxima para emparejar feedback TCP con su objetivo. |
 | `RSTACK_METRICS_RETENTION_DAYS` | Retención detallada en configuración; limpieza automática aún pendiente. |
 | `ROS_DOMAIN_ID` | Dominio ROS local; mantener DDS dentro del host/red de control configurada. |
 | `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST`; ROS sólo descubre nodos en el mismo host. |
@@ -527,7 +584,7 @@ necesita incluir FastAPI CLI si su grupo de dependencias no la requiere.
 
 | Ruta objetivo | Uso |
 | --- | --- |
-| `GET /healthz`, `GET /readyz` | Liveness del proceso y readiness de DB/ROS/estación; worker se informa por separado para evitar ciclo de arranque. |
+| `GET /healthz`, `GET /readyz` | Liveness y readiness de storage/ROS/cámaras; `/readyz.storage` informa backend y persistencia. Worker se informa por separado para evitar ciclo de arranque. |
 | `GET /openapi.json` | Esquema OpenAPI generado por FastAPI, fuente para Scalar y codegen TypeScript. |
 | `GET /api-docs` | Scalar API Reference en dev y producción; reemplaza Swagger/ReDoc. |
 | `POST /api/v1/auth/session`, `DELETE /api/v1/auth/session` | Intercambia token operador por sesión web segura y revoca la sesión. |
@@ -537,6 +594,7 @@ necesita incluir FastAPI CLI si su grupo de dependencias no la requiere.
 | `PUT /api/v1/task` | Cambiar tarea sólo en `READY` o `PAUSED`. |
 | `GET /api/v1/metrics` | Resúmenes, contadores y latencias de la operación/sesión actual. |
 | `GET /api/v1/events` | SSE para cambios de estado, métricas y eventos de operación. |
+| `GET /api/v1/events/history?limit=20&offset=0` | Historial paginado; máximo 100 registros por consulta. |
 | `WS /api/v1/teleop` | Entrada gamepad y acknowledgements de teleoperación autenticados. |
 
 Todos los recursos usan JSON, salvo JPEG, SSE y WebSocket. `GET /api/v1/status`
@@ -554,12 +612,12 @@ bimanual; no requiere `selected_arm`.
 rechaza, `code` y `reason`. Los comandos repetidos con el mismo request id son
 idempotentes.
 
-SSE emite eventos JSON con `event_id`, `timestamp`, `operation_id`, `type` y
-`data`; los tipos iniciales son `status`, `metric`, `action`, `camera_health`,
-`worker_health` y `fault`. `GET /api/v1/metrics` devuelve `window_ms`,
-`sample_count`, métricas por etapa con `last_ms`, `mean_ms`, `median_ms`,
-`p95_ms` y series temporales por bucket. Un valor sin suficientes muestras es
-`null`, nunca cero. Las series usan timestamps de estación.
+SSE emite eventos JSON con `event_id`, `type` y `data`; `GET /api/v1/events`
+envía primero los registros recientes y después los nuevos. `GET
+/api/v1/metrics` devuelve `sample_count`, contadores por fuente, agregados por
+etapa (`last_ms`, `mean_ms`, `median_ms`, `p95_ms`) y agregados TCP por brazo
+(`last_mm`, `mean_mm`, `median_mm`, `p95_mm`, orientación y marca de la última
+muestra). Cuando no hay muestras, los valores son `null`, nunca cero.
 
 `POST /api/v1/auth/session` recibe `{"operator_token":"..."}` por HTTPS y
 establece cookie de sesión `Secure`, `HttpOnly` y `SameSite=Strict`; no devuelve
@@ -637,13 +695,15 @@ deadman, ROS readiness, estado del driver o feedback no estén validados.
 
 ## Métricas, trazas y panel
 
-### Diferencia entre hoy y objetivo
+### Estado del panel implementado
 
-Hoy el worker mantiene métricas de inferencia/cola en memoria. Station agrega
-contadores por fuente y etapas, publica eventos SSE y persiste eventos, métricas,
-invocaciones y acciones en PostgreSQL con una cola asíncrona acotada. La UI muestra
-conteos por fuente y eventos perdidos; todavía no implementa las gráficas
-históricas especificadas en este documento. `p50` equivale a la mediana.
+El worker mantiene métricas de inferencia/cola en memoria. Station agrega
+contadores por fuente y etapas, publica eventos SSE y expone agregados de media,
+mediana/p50, p95 y último valor. Con backend `postgres` persiste eventos,
+métricas, invocaciones y acciones mediante una cola asíncrona acotada; con
+`memory` los conserva en colecciones limitadas del proceso. La actividad de la
+UI muestra registros resumidos y paginados, con payload técnico desplegable.
+`p50` equivale a la mediana.
 
 ### Esquema de operación
 
@@ -664,13 +724,16 @@ de control. Worker y estación se ejecutan en el mismo host. Registrar al menos:
 | Precisión TCP | Error entre FK del objetivo aplicado y `feedback/tcp_pose` físico por brazo, en mm/grados y con edad/frame de feedback. |
 | Operación | Inicio/fin, duración total, fuente, brazo, tarea, acciones aceptadas/rechazadas y resultado final. |
 
-Las métricas detalladas se guardan en PostgreSQL mediante escritura asíncrona
+Con PostgreSQL, las métricas detalladas se guardan mediante escritura asíncrona
 acotada para no bloquear el loop ROS/control. La base es durable en volumen
 Docker, sólo accesible al host/servicio, con backup mediante `pg_dump` y
-retención configurable; una cola saturada incrementa contador visible y nunca
-bloquea ni autoriza acciones. No guardar imágenes en la base de métricas. La vista muestra
-mediana (p50), media, p95, muestras y ventana, además de últimos valores. Los
-percentiles se calculan sobre muestras explícitas; no promediar percentiles.
+retención configurable. El modo memoria limita cada colección de historial, el
+EventBus y el acumulador de métricas a `RSTACK_MEMORY_HISTORY_LIMIT` (100.000 por
+defecto) y descarta los registros más antiguos; el contador de descartes queda
+visible. Una cola saturada incrementa el contador visible y nunca bloquea ni
+autoriza acciones. No guardar imágenes en la base de métricas. El dashboard
+muestra mediana (p50), media, p95, muestras y últimos valores. Los percentiles
+se calculan sobre muestras explícitas; no promediar percentiles.
 
 ### Separación de métricas por fuente y acción
 
@@ -712,19 +775,19 @@ borra detalle vencido por lotes sin borrar agregados de operación.
 
 ### Vista de métricas en tiempo real
 
-La pestaña Operación muestra estado/fuente/brazo, duración total, contadores,
-último error y salud de conexión. Gráficas TypeScript (Recharts) se actualizan
-desde SSE, con intervalo de refresco configurable y carga histórica desde la API:
+La pestaña Operación muestra agregados por etapa y brazo: media, mediana/p50,
+p95, último valor y tamaño de muestra. La precisión TCP indica la hora de la
+última medición y explica si no hay nuevas metas por pausa o teleoperación. El
+historial de actividad se carga desde la API por páginas y SSE agrega eventos
+nuevos; cada fila tiene un resumen legible y un payload técnico plegable.
 
-- serie temporal por latencia de cámara/observación, Dream/RTT, cálculo,
-  validación ROS y feedback;
-- mean, median/p50 y p95 por etapa para ventana actual y operación;
-- edad/skew de cada cámara y acciones por segundo;
-- aceptadas/rechazadas/timeout, profundidad de cola y pausas/watchdogs.
-
-Mostrar unidades, intervalo, tamaño de muestra, brazo/fuente y huecos por pérdida
-de datos. Si la métrica no está disponible, mostrar “sin datos”; nunca un cero
-que parezca medición. Métricas son observabilidad, no una garantía de seguridad.
+La evolución futura del panel puede añadir series temporales de latencia de
+cámara/observación, Dream/RTT, cálculo, validación ROS y feedback; edad/skew de
+cámaras; acciones por segundo; aceptadas/rechazadas/timeout; profundidad de cola
+y pausas/watchdogs. Mostrar unidades, intervalo, tamaño de muestra,
+brazo/fuente y huecos por pérdida de datos. Si una métrica no está disponible,
+mostrar “sin datos”; nunca un cero que parezca medición. Métricas son
+observabilidad, no una garantía de seguridad.
 
 El worker adjunta la pose TCP teórica (FK del objetivo articular) a cada acción.
 `station_bridge` la compara sin bloquear el envío, en muestras físicas frescas

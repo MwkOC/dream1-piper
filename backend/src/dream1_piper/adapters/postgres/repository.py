@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from dream1_piper.adapters.postgres.models import (
     ActionRecord,
@@ -63,6 +63,23 @@ class StationRepository:
             rows = await session.scalars(query)
             return [self._operation(row) for row in rows]
 
+    async def list_events(self, limit, offset):
+        async with self.database.sessions() as session:
+            total = await session.scalar(select(func.count()).select_from(SystemEvent))
+            query = (
+                select(SystemEvent)
+                .order_by(SystemEvent.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            rows = await session.scalars(query)
+            return {
+                "items": [self._event(row) for row in rows],
+                "total": int(total or 0),
+                "limit": limit,
+                "offset": offset,
+            }
+
     async def operation_detail(self, operation_id):
         async with self.database.sessions() as session:
             operation = await session.get(Operation, operation_id)
@@ -113,6 +130,15 @@ class StationRepository:
             "started_at": item.started_at,
             "ended_at": item.ended_at,
             "result": item.result,
+        }
+
+    @staticmethod
+    def _event(item):
+        return {
+            "event_id": item.event_id,
+            "type": item.event_type,
+            "data": item.data,
+            "received_at": item.created_at,
         }
 
     @staticmethod

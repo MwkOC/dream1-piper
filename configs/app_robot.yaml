@@ -29,7 +29,8 @@ station:
   camera_max_skew_ms: 60
   camera_sync_wait_ms: 100
   teleop_jog_speed_m_s: 0.01
-  home_action: [0.0, 0.5, -1.0, 0.0, 0.5, 0.0, 0.3, 0.0, 0.5, -1.0, 0.0, 0.5, 0.0, 0.3]
+  # Matches Robotics_train_stack's low ready pose (radians, gripper normalized).
+  home_action: [0.0, 0.0, 0.0, 0.0, 0.4363323, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.4363323, 0.0, 0.0]
 robot:
   # Worker-side adapter schema; ROS 2 driver nodes are started by station.launch.py.
   driver: piper_bimanual

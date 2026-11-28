@@ -67,7 +67,7 @@ class StationService:
         if source == ControlSource.TELEOP and selected_arm not in {"left", "right"}:
             raise ValueError("manual teleoperation requires exactly one selected arm")
         if source == ControlSource.DREAM and not self.worker_connected:
-            raise RuntimeError("Dream worker is not connected")
+            raise ValueError("Dream worker is not connected")
         self.control_generation += 1
         self.session_id = str(uuid4())
         self.control_source = source

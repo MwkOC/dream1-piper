@@ -11,9 +11,18 @@ cuando llega feedback físico fresco.
 La distancia euclídea entre posiciones se presenta en milímetros. El error de
 orientación es el ángulo mínimo entre cuaterniones, en grados. Cada muestra
 incluye brazo, secuencia e invocación Dream, frame, timestamp ROS del feedback y
-edad local del objetivo. La frecuencia y edad máxima se configuran con
-`RSTACK_POSE_METRICS_HZ` (2 Hz por brazo por defecto) y
-`RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS` (250 ms por defecto).
+edad local del objetivo. La frecuencia se configura con `RSTACK_POSE_METRICS_HZ`
+(1/3 Hz por brazo, una muestra cada 3 segundos, por defecto) y la ventana máxima
+de emparejamiento con `RSTACK_POSE_METRICS_MAX_TARGET_AGE_MS` (250 ms por
+defecto).
+
+Para evitar desincronización, el bridge guarda una historia acotada de objetivos
+con el timestamp ROS exacto usado al publicar cada comando. Cada feedback se
+empareja con el objetivo más reciente cuyo timestamp no sea posterior al del
+feedback. Se descarta si la diferencia de timestamps o la edad de llegada supera
+la ventana configurada. La muestra conserva ambos tiempos y la secuencia del
+objetivo emparejado. Esto requiere que el reloj ROS y los timestamps del driver
+usen la misma base temporal; rosbag permite comprobar esa alineación.
 
 Las muestras se publican en `/dream1/metrics/tcp_tracking`, se agregan a los
 eventos en vivo y se guardan como `stage_metrics` en PostgreSQL. La UI muestra

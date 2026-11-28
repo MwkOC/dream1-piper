@@ -33,7 +33,7 @@ dev = ["pytest>=8.3,<9", "pytest-asyncio>=1.0,<2", "httpx>=0.28,<1", "ruff>=0.12
 
 [project.scripts]
 dream1-piper-station = "dream1_piper.main:run"
-dream1-piper-worker = "dream1_piper.worker.main:run"
+dream1-piper-worker = "dream1_piper.worker.main:main"
 
 [tool.uv]
 package = true

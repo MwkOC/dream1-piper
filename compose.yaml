@@ -2,12 +2,13 @@ name: dream1-piper
 
 services:
   postgres:
+    profiles: ["database"]
     image: ${POSTGRES_IMAGE:-postgres:18.7-bookworm}
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-dream1_piper}
+      POSTGRES_USER: ${POSTGRES_USER:-dream1_piper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dream1_piper}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -28,6 +29,8 @@ services:
     env_file: .env
     environment:
       RSTACK_ENVIRONMENT: ${RSTACK_ENVIRONMENT:-development}
+      RSTACK_STORAGE_BACKEND: ${RSTACK_STORAGE_BACKEND:-postgres}
+      RSTACK_MEMORY_HISTORY_LIMIT: ${RSTACK_MEMORY_HISTORY_LIMIT:-10000}
       RSTACK_UI_HOST: ${RSTACK_UI_HOST:-127.0.0.1}
       RSTACK_UI_PORT: ${RSTACK_UI_PORT:-8443}
       RSTACK_ROBOT_CONFIG: /app/configs/app_robot.yaml
@@ -37,7 +40,7 @@ services:
       RSTACK_CAMERA_LEFT_DEVICE: ${CAMERA_LEFT_CONTAINER:-/dev/video-left}
       RSTACK_CAMERA_TOP_DEVICE: ${CAMERA_TOP_CONTAINER:-/dev/video-top}
       RSTACK_CAMERA_RIGHT_DEVICE: ${CAMERA_RIGHT_CONTAINER:-/dev/video-right}
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env, using 127.0.0.1 as host}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://dream1_piper:dream1_piper@127.0.0.1:5432/dream1_piper}
       RSTACK_UI_TLS_CERT: ${RSTACK_UI_TLS_CERT:-}
       RSTACK_UI_TLS_KEY: ${RSTACK_UI_TLS_KEY:-}
     network_mode: host
@@ -53,9 +56,6 @@ services:
         permissions: rwm
     group_add:
       - "${VIDEO_GID:-44}"
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "scheme=http; if [ -n \"$${RSTACK_UI_TLS_CERT:-}\" ]; then scheme=https; fi; curl --fail --silent --insecure \"$${scheme}://127.0.0.1:$${RSTACK_UI_PORT}/healthz\" || exit 1"]
       interval: 10s

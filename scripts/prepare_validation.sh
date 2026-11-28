@@ -85,6 +85,9 @@ build_ros_workspace() {
   cd "$ROOT/ros2_ws"
   source_ros_setup
   vcs import --recursive src < src/agilex.repos
+  # The pinned AgileX commit marks this ROS executable as a plain data file.
+  # With --symlink-install ROS follows the source mode, so launch cannot find it.
+  chmod u+x src/agx_arm_ros/src/agx_arm_moveit/scripts/agx_arm_control_gate
   # These two keys are absent from Jazzy's rosdep rules. ament_python is
   # provided by the installed colcon/ament build tooling; the upstream
   # warehouse_ros_mongo dependency is only for the optional MoveIt DB feature.
@@ -102,6 +105,11 @@ build_ros_workspace() {
   ros2 pkg prefix agx_arm_ctrl
   ros2 pkg prefix moveit_servo
   ros2 pkg prefix dream1_piper_ros
+  if ! /usr/bin/python3 -c 'import pyAgxArm' >/dev/null 2>&1; then
+    printf '\nWARNING: pyAgxArm is not installed for /usr/bin/python3 (Python 3.12).\n'
+    printf 'The ROS Piper nodes will exit with ModuleNotFoundError until the SDK is installed.\n'
+    printf 'See the “Workspace ROS 2 Jazzy” section in docs/APP_OPERATIONS.md.\n'
+  fi
 }
 
 build_app_image() {
@@ -113,11 +121,18 @@ build_app_image() {
 compose_env_ready() {
   local required=(
     DREAM_API_KEY RSTACK_UI_OPERATOR_TOKEN RSTACK_WORKER_TOKEN RSTACK_SESSION_SECRET
-    POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL
     CAMERA_LEFT_HOST CAMERA_TOP_HOST CAMERA_RIGHT_HOST
   )
-  local key missing=0
+  local key missing=0 storage_backend=postgres
   [[ -f "$ROOT/.env" ]] || { printf 'Falta %s/.env\n' "$ROOT"; return 1; }
+  storage_backend=$(awk -F= '$1 == "RSTACK_STORAGE_BACKEND" { print $2; exit }' "$ROOT/.env")
+  storage_backend=${storage_backend:-postgres}
+  if [[ "$storage_backend" == "postgres" ]]; then
+    required+=(POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL)
+  elif [[ "$storage_backend" != "memory" ]]; then
+    printf 'RSTACK_STORAGE_BACKEND debe ser postgres o memory (actual: %s)\n' "$storage_backend"
+    return 1
+  fi
   for key in "${required[@]}"; do
     if ! awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); if ($0 !~ /^[[:space:]]*$/) found=1 } END { exit !found }' "$ROOT/.env"; then
       printf 'Falta completar en .env: %s\n' "$key"

@@ -40,6 +40,36 @@ export type OperationRecord = {
   operation_id: string; task_id: string | null; task_snapshot: string; control_source: string;
   selected_arm: string | null; started_at: string; ended_at: string | null; result: string | null;
 };
+export type ActivityRecord = {
+  event_id: string;
+  type: string;
+  data: Record<string, unknown>;
+  received_at: string;
+};
+export type MetricSummary = {
+  sample_count: number;
+  mean_ms?: number | null;
+  median_ms?: number | null;
+  p95_ms?: number | null;
+  last_ms?: number | null;
+};
+export type TrackingSummary = {
+  sample_count: number;
+  mean_mm?: number | null;
+  median_mm?: number | null;
+  p95_mm?: number | null;
+  last_mm?: number | null;
+  last_orientation_error_deg?: number | null;
+  last_target_age_ms?: number | null;
+  last_recorded_at?: string | null;
+};
+export type MetricsSnapshot = {
+  sample_count: number;
+  by_source: Record<string, number>;
+  dropped: number;
+  stages: Record<string, MetricSummary>;
+  tcp_tracking: Record<"left" | "right", TrackingSummary>;
+};
 
 function operation(): OperationCommand {
   return { request_id: crypto.randomUUID() };
@@ -62,6 +92,9 @@ export const api = {
   }),
   deleteTask: (taskId: string) => request<{ deleted: boolean }>(`/api/v1/tasks/${taskId}`, { method: "DELETE" }),
   operations: (offset = 0) => request<OperationRecord[]>(`/api/v1/operations?limit=50&offset=${offset}`),
+  activityEvents: (limit = 20, offset = 0) => request<{
+    items: ActivityRecord[]; total: number; limit: number; offset: number;
+  }>(`/api/v1/events/history?limit=${limit}&offset=${offset}`),
   operation: (id: string) => request<Record<string, unknown>>(`/api/v1/operations/${id}`),
   purgeHistory: () => request<{ deleted: boolean }>("/api/v1/history", {
     method: "DELETE", body: JSON.stringify({ confirmation: "DELETE ALL DATA" }),
@@ -87,6 +120,6 @@ export const api = {
   },
   metrics: () => fetch("/api/v1/metrics", { credentials: "include" }).then(response => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json() as Promise<{ sample_count: number; by_source: Record<string, number>; dropped: number }>;
+    return response.json() as Promise<MetricsSnapshot>;
   }),
 };

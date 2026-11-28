@@ -91,7 +91,10 @@ class TeleopService:
         self.deadman_active = False
         self.last_sequence = sequence
         self.last_message_at = time.monotonic()
-        await self.gateway.command("stop", {"reason": "teleop deadman released"})
+        generation = self.station.control_generation + int(self.station.state.value == "RUNNING")
+        await self.gateway.command(
+            "stop", {"reason": "teleop deadman released", "generation": generation}
+        )
         if self.station.state.value == "RUNNING":
             self.station.pause(uuid4(), "teleop deadman released")
         await socket.send_json(
@@ -171,7 +174,10 @@ class TeleopService:
         if self.active_socket is None:
             return
         try:
-            await self.gateway.command("stop", {"reason": reason})
+            generation = self.station.control_generation + int(
+                self.station.state.value == "RUNNING" and self.station.control_source.value == "teleop"
+            )
+            await self.gateway.command("stop", {"reason": reason, "generation": generation})
         except Exception:
             pass
         self.active_socket = None
